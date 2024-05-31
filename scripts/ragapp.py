@@ -1,6 +1,7 @@
 
 import os, tempfile
 from pathlib import Path
+os.path.join('..')
 os.environ['ANTHROPIC_API_KEY'] = "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"
 import streamlit as st
 import pytesseract
@@ -21,11 +22,11 @@ from langchain.vectorstores import Chroma
 from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
 
 from langchain.chains import create_history_aware_retriever
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from langchain.chains import create_retrieval_chain, ConversationChain, LLMChain
 from langchain_core.messages import HumanMessage, AIMessage
-
+from prompts.prompt_template import *
 LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
 TMP_DIR = Path(__file__).resolve().parent.joinpath('data', 'tmp')
 
@@ -78,28 +79,33 @@ def setup_retriever_chain(retriever, llm, conversational=False):
         ("user","{input}"),
         ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
         ])
-        retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
-        prompt_get_answer = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
-        MessagesPlaceholder(variable_name="chat_history"),
-        ("user","{input}"),
-        ])
-        document_chain=create_stuff_documents_chain(llm,prompt_get_answer)
-        rag_chain = create_retrieval_chain(retriever_chain, document_chain)
+        conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
+        rag_chain = LLMChain(llm=llm, prompt=conv_prompt, output_key='answer')
+        # retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
+        # prompt_get_answer = ChatPromptTemplate.from_messages([
+        # ("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
+        # MessagesPlaceholder(variable_name="chat_history"),
+        # ("user","{input}"),
+        # ])
+        # document_chain=create_stuff_documents_chain(llm,prompt_get_answer)
+        # rag_chain = create_retrieval_chain(retriever_chain, document_chain)
     else:
-        prompt_get_answer_rag = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions based on the below context:\\n\\n{context}. If you don't know the answer just say you dont know. Do not try to come up with something. Keep your answer brief and to the point."),
-        ("user","{input}"),
-        ])
-        document_chain_rag =create_stuff_documents_chain(llm,prompt_get_answer_rag)
+        prompt_get_answer_rag = PromptTemplate(input_variables=['input', 'context'], template=RAG_PROMPT_TEMPLATE)
+        # prompt_get_answer_rag = ChatPromptTemplate.from_messages([
+        # ("system", "Answer the user's questions based on the below context:\\n\\n{context}. If you don't know the answer just say you dont know. Do not try to come up with something. Keep your answer brief and to the point."),
+        # ("user","{input}"),
+        # ])
+        document_chain_rag =create_stuff_documents_chain(llm, prompt_get_answer_rag)
         rag_chain = create_retrieval_chain(retriever, document_chain_rag)
 
     return rag_chain
+
 
 def query_chain():
     query_text = st.session_state.current_input
     k = st.session_state.search_k if st.session_state.search_k else 7
     retriever = st.session_state.vector_db.as_retriever(search_kwargs={'k': k})
+
     st.session_state.rag_chain = setup_retriever_chain(retriever, 
                                                 st.session_state.llm_model, 
                                                 st.session_state.conversation_response)
@@ -107,10 +113,14 @@ def query_chain():
     #save the query in the chat history
     st.session_state.messages.append({"speaker" : "user", "content": query_text})
 
-    result = st.session_state.rag_chain.invoke({'input': query_text})
+
+    #result = st.session_state.rag_chain.invoke({'input': query_text})
+
+    result = st.session_state.rag_chain.invoke({'input': query_text, 'history': get_session_chat_history() })
 
     st.session_state.response = result['answer']
-    st.session_state.response_context = result['context']
+    if not st.session_state.conversation_response:
+        st.session_state.response_context = result['context']
     st.session_state.messages.append({"speaker" : "AI",
                                        "content": result['answer']})
 
