@@ -45,7 +45,7 @@ def load_documents():
 
 
 def split_documents(documents):
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=20)
     texts = text_splitter.split_documents(documents)
     return texts
 
@@ -68,62 +68,43 @@ def setup_llm(llm_name:str):
         return Ollama(model='llama3', system='You are a helpful question answering bot.')
     if llm_name=='claude':
         return AnthropicLLM(model='claude-2.1')
+    
 
 
+def setup_llm_chains(retriever, llm):
 
-def setup_retriever_chain(retriever, llm, conversational=False):
+    if st.session_state.conversation_response:
+        conv_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=CONV_PROMPT_TEMPLATE)
+        chain = LLMChain(llm=llm, prompt=conv_prompt, output_key='answer')
 
-    if conversational:
-        prompt_search_query = ChatPromptTemplate.from_messages([
-        MessagesPlaceholder(variable_name="chat_history"),
-        ("user","{input}"),
-        ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
-        ])
-        conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
-        rag_chain = LLMChain(llm=llm, prompt=conv_prompt, output_key='answer')
-        # retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
-        # prompt_get_answer = ChatPromptTemplate.from_messages([
-        # ("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
-        # MessagesPlaceholder(variable_name="chat_history"),
-        # ("user","{input}"),
-        # ])
-        # document_chain=create_stuff_documents_chain(llm,prompt_get_answer)
-        # rag_chain = create_retrieval_chain(retriever_chain, document_chain)
     else:
         prompt_get_answer_rag = PromptTemplate(input_variables=['input', 'context'], template=RAG_PROMPT_TEMPLATE)
-        # prompt_get_answer_rag = ChatPromptTemplate.from_messages([
-        # ("system", "Answer the user's questions based on the below context:\\n\\n{context}. If you don't know the answer just say you dont know. Do not try to come up with something. Keep your answer brief and to the point."),
-        # ("user","{input}"),
-        # ])
         document_chain_rag =create_stuff_documents_chain(llm, prompt_get_answer_rag)
-        rag_chain = create_retrieval_chain(retriever, document_chain_rag)
-
-    return rag_chain
-
+        chain = create_retrieval_chain(retriever, document_chain_rag)
+    st.session_state.chain = chain
 
 def query_chain():
     query_text = st.session_state.current_input
     k = st.session_state.search_k if st.session_state.search_k else 7
     retriever = st.session_state.vector_db.as_retriever(search_kwargs={'k': k})
-
-    st.session_state.rag_chain = setup_retriever_chain(retriever, 
-                                                st.session_state.llm_model, 
-                                                st.session_state.conversation_response)
-      
-    #save the query in the chat history
-    st.session_state.messages.append({"speaker" : "user", "content": query_text})
-
-
-    #result = st.session_state.rag_chain.invoke({'input': query_text})
-
-    result = st.session_state.rag_chain.invoke({'input': query_text, 'history': get_session_chat_history() })
+    setup_llm_chains(retriever,
+                    st.session_state.llm_model,
+                    )
+    
+    if st.session_state.conversation_response:
+        result = st.session_state.chain.invoke({'input': query_text, 'chat_history': get_session_chat_history() })
+    else:
+        result = st.session_state.chain.invoke({'input': query_text })
 
     st.session_state.response = result['answer']
     if not st.session_state.conversation_response:
         st.session_state.response_context = result['context']
+    
+    #save the query in the chat history
+    st.session_state.messages.append({"speaker" : "user", "content": query_text})
     st.session_state.messages.append({"speaker" : "AI",
-                                       "content": result['answer']})
-
+                                        "content": result['answer']})
+  
 
 ################################  front end functions  ################################
 def input_fields():
@@ -168,12 +149,7 @@ def process_documents():
         texts = split_documents(documents)
             #
         k = st.session_state.search_k if st.session_state.search_k else 7
-        st.session_state.vector_db =  create_vector_db(texts)
-        retriever = st.session_state.vector_db.as_retriever(search_kwargs={'k': k})
-        st.session_state.rag_chain = setup_retriever_chain(retriever, 
-                                                    st.session_state.llm_model, 
-                                                    st.session_state.conversation_response)
-      
+        st.session_state.vector_db =  create_vector_db(texts)      
 
 def main():
     # page title
@@ -196,7 +172,7 @@ def main():
     # App logic
     uploaded_file = st.session_state.source_docs
 
-    query_text = st.chat_input(placeholder = 'Enter query here ...', 
+    st.chat_input(placeholder = 'Enter query here ...', 
                             disabled=not uploaded_file, 
                             on_submit=query_chain,
                             key='current_input')
