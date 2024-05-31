@@ -8,7 +8,7 @@ ROUTER_PROMPT_TEMPLATE = "Given an input, decide whether responding to it would 
 CONV_PROMPT_TEMPLATE = "You are a helpful bot who can hold a polite conversation with a fellow human. \
                         You will be provided with a history of messages. Based on that you need to form a final \
                         response. Try not to be too wordy.\n\n \n\n \
-                        The chat history: {history}\n \
+                        The chat history: {chat_history}\n \
                         Human's last chat: {input}"
 
 
