@@ -17,3 +17,17 @@ RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provide
          Keep your answer brief and to the point. \n\n \
          The context: {context} \n \
          Human's question: {input}"
+
+
+RETRIEVE_REPHRASE_PROMPT = ChatPromptTemplate.from_messages([
+('system',"Given the above conversation history and the latest user input, \
+ your task is to ONLY REWRITE the user input that can used as a standalone question. Respond with a json with \
+ two keys 'original_input' and 'rephrased_input' " ),
+MessagesPlaceholder(variable_name="chat_history"),
+("user","{input}")
+])
+
+DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
+("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
+("user","{input}"),
+])
