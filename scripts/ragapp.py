@@ -27,9 +27,12 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain, ConversationChain, LLMChain
 from langchain_core.messages import HumanMessage, AIMessage
 from prompts.prompt_template import *
+from utils.utils import *
 import ipdb 
 
 LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
+
+PERSIST_DIRECTORY = Path('../vectorstore_test')
 TMP_DIR = Path(__file__).resolve().parent.parent.joinpath('data', 'tmp')
 os.makedirs(TMP_DIR, exist_ok=True)
 
@@ -48,95 +51,95 @@ def split_documents(documents):
     return texts
 
 def create_vector_db(texts):
-    vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
-                                    # persist_directory=LOCAL_VECTOR_STORE_DIR.as_posix())
+    #vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
+    vectordb = Chroma(persist_directory=PERSIST_DIRECTORY.as_posix(), embedding_function=HuggingFaceEmbeddings())
     #vectordb.persist()
     return vectordb
 
 
-def setup_llm(llm_name:str):
-    if llm_name=='llama3':
-        return Ollama(model='llama3', system='You are a helpful question answering bot.')
-    if llm_name=='claude':
+def setup_llms():
+
+    if st.session_state.llm=='llama3':
+        st.session_state.llm_model_chat = Ollama(model='llama3', system='You are a helpful question answering bot.')
+        st.session_state.llm_model_instruct = Ollama(model='llama3', system="You are an LLM that is excellent at following instructions")
+    
+    if st.session_state.llm=='claude':
         return AnthropicLLM(model='claude-2.1')
     
 
-
-def parse_resp(response_string):
-    '''
-    Parse the response to get the one word answer.
-    '''
-    full_response = response_string.strip().split('{')[1].split('}')[0]
-    one_word_response = full_response.split(",")[0]
-    word = one_word_response.split(':')[1].strip('" "')
-    return word
-
-def setup_llm_chains(retriever, llm):
+def setup_llm_chains():
 
     #build the conversation chain
     conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
-    conv_chain = LLMChain(llm=llm, prompt=conv_prompt, output_key='answer')
+    st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
 
 
     #build the retriever chain 
-    prompt_search_query = ChatPromptTemplate.from_messages([
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("user","{input}"),
-    ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
-    ])
-    retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
+
+    # prompt_search_query = ChatPromptTemplate.from_messages([
+    # MessagesPlaceholder(variable_name="chat_history"),
+    # ("user","{input}"),
+    # ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
+    # ])
+    # retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
+    
+    #build the rephrase chain 
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=RETRIEVE_REPHRASE_PROMPT)
 
 
-    prompt_get_answer = ChatPromptTemplate.from_messages([
-    ("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("user","{input}"),
-    ])
-    document_chain=create_stuff_documents_chain(llm,prompt_get_answer)
-    rag_chain = create_retrieval_chain(retriever_chain, document_chain)
-
+    #build the document chain
+    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, DOCUMENT_CHAIN_PROMPT)
 
     #build the router chain
     router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE
     )
-    router_chain = LLMChain(llm=llm, prompt=router_prompt, output_key='answer')
+    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
-    #setup the session variables
-    st.session_state.conv_chain = conv_chain
-    st.session_state.rag_chain = rag_chain 
-    st.session_state.router_chain = router_chain 
 
 
 
 def query_chain():
     query_text = st.session_state.current_input
-    k = st.session_state.search_k if st.session_state.search_k else 7
-    retriever = st.session_state.vector_db.as_retriever(search_kwargs={'k': k})
-
     sources = set([val['source'] for val in st.session_state.vector_db.get()['metadatas']])
-    ipdb.set_trace()
-    setup_llm_chains(retriever, st.session_state.llm_model)
-      
+    k = st.session_state.search_k if st.session_state.search_k else 3  
+    retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
 
     #use chains
+
+    #check if retrieval is required
     resp = st.session_state.router_chain.invoke({'input': query_text})
-    is_qa = parse_resp(resp['answer'])
+    is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
     
     input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
+    
     if is_qa.strip().lower()=='yes':
-        result = st.session_state.rag_chain.invoke(input_dict)
-        st.session_state.response = result['answer']
-        st.session_state.response_context = result['context']
+
+        #rephrase question using history
+        resp = st.session_state.rephrase_chain.invoke(input_dict)
+        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+        print("Rephrased input :", resp_string)
+        #use response to retrieve relevant documents 
+        docs = retriever.get_relevant_documents(resp_string)
+
+        #get answer using relevant documents and question
+        result = st.session_state.document_chain.invoke({'input':resp_string, 
+                                                'context':docs})
+
+        print("RESULT ***************", result)
+        st.session_state.response = result
+        st.session_state.response_context = docs
+
     else:
         result = st.session_state.conv_chain.invoke(input_dict)
-        st.session_state.response = result['answer']
+        result = result['answer']
+        st.session_state.response = result
         st.session_state.response_context = "NO CONTEXT FOR REGULAR CHAT"    
     
     #save the query in the chat history
     st.session_state.messages.append({"speaker" : "user", "content": query_text})
     st.session_state.messages.append({"speaker" : "AI",
-                                       "content": result['answer']})
+                                       "content": result})
   
 
 ################################  front end functions  ################################
@@ -169,16 +172,12 @@ def process_documents():
     else:
 
         for source_doc in st.session_state.source_docs:
-            ipdb.set_trace()
             with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
                                              prefix=source_doc.name.split('.')[0],
                                              suffix='.pdf') as tmp_file:
                 tmp_file.write(source_doc.read())
         
         documents = load_documents()
-        print("**********\n\n\n")
-        print(len(documents))
-        print("*****************")
         #
         for _file in TMP_DIR.iterdir():
             temp_file = TMP_DIR.joinpath(_file)
@@ -191,13 +190,15 @@ def process_documents():
 
 def main():
     # page title
-    st.set_page_config(page_title='🦜🔗 Ask the Data App')
+    st.set_page_config(page_title='Helper bot')
     st.title(
-        '🦜🔗 Ask the Data App'
+        'Helper bot'
     )
     input_fields()
+    setup_llms()
+    setup_llm_chains()
+
     st.button("Submit documents", on_click=process_documents)
-    st.session_state.llm_model = setup_llm(st.session_state.llm)
 
 
     # question_list = [
