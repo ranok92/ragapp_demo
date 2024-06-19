@@ -30,6 +30,17 @@ from prompts.prompt_template import *
 from utils.utils import *
 import ipdb 
 
+import warnings
+warnings.filterwarnings("ignore")
+
+from selfcheckgpt.modeling_selfcheck import SelfCheckNLI
+import torch
+import spacy 
+from annotated_text import annotated_text
+
+nlp = spacy.load("en_core_web_sm")
+
+
 LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
 
 PERSIST_DIRECTORY = Path('../vectorstore_test')
@@ -97,6 +108,29 @@ def setup_llm_chains():
     st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
 
+def check_sentence_hallucination(query, context, response, sample_size=5):
+    '''
+    Given the query and context used to generate the original respose
+    and the response, check for hallucination on a sentence level
+    '''
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    selfcheck_nli = SelfCheckNLI(device=device) # set device to 'cuda' if GPU is available
+
+    sample_responses = []
+    #generate sample answers
+    for i in range(sample_size):
+        samp_resp = st.session_state.document_chain.invoke({'input':query, 
+                                                'context':context})
+        sample_responses.append(samp_resp)
+
+    #break into sentence
+    resp_sentences = [sent.text.strip() for sent in nlp(response).sents] # spacy sentence tokenization
+
+    sent_scores_nli = selfcheck_nli.predict(
+        sentences = resp_sentences,                          # list of sentences
+        sampled_passages = sample_responses, # list of sampled passages
+    )
+    return resp_sentences, sent_scores_nli
 
 
 def query_chain():
@@ -118,7 +152,7 @@ def query_chain():
         #rephrase question using history
         resp = st.session_state.rephrase_chain.invoke(input_dict)
         resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
-        print("Rephrased input :", resp_string)
+        print("**********Rephrased input :", resp_string)
         #use response to retrieve relevant documents 
         docs = retriever.get_relevant_documents(resp_string)
 
@@ -126,20 +160,32 @@ def query_chain():
         result = st.session_state.document_chain.invoke({'input':resp_string, 
                                                 'context':docs})
 
+        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=3)
+        anno_result = ""
+        for sent, score in zip(resp_sent, scores):
+            if score < 0.2: #0 is no hallu, 1 is hallu
+                sent = f":red-background[{sent}]"
+            anno_result += sent 
+        #result = anno_result
+        print("Scores ***************", scores)
         print("RESULT ***************", result)
-        st.session_state.response = result
+        print("RESULT ***************", anno_result)
+
+        st.session_state.response = anno_result
         st.session_state.response_context = docs
 
     else:
         result = st.session_state.conv_chain.invoke(input_dict)
-        result = result['answer']
+        anno_result = result['answer']
         st.session_state.response = result
         st.session_state.response_context = "NO CONTEXT FOR REGULAR CHAT"    
     
     #save the query in the chat history
     st.session_state.messages.append({"speaker" : "user", "content": query_text})
+    
+    #annotate the response with hallucination information
     st.session_state.messages.append({"speaker" : "AI",
-                                       "content": result})
+                                       "content": anno_result})
   
 
 ################################  front end functions  ################################
@@ -222,7 +268,7 @@ def main():
     with st.container(height=500):
         #display the chat history so far
         for msg in st.session_state.messages:
-            st.chat_message(msg['speaker']).write(msg['content'])
+            st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
     with st.container(height=200):
