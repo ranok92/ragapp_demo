@@ -28,6 +28,10 @@ MessagesPlaceholder(variable_name="chat_history"),
 ])
 
 DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
-("system", "Answer the user's questions based on the below context:\\n\\n{context}"),
+("system", "Answer the user's questions based on the context below. \
+ If you don't know the answer just say you dont know. Do not try to  \
+ come up with something. \n \ Make sure that \
+ your response can be supported by the information provided in the \
+ context:\\n The context: \\n{context}"),
 ("user","{input}"),
 ])
