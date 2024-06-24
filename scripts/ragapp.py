@@ -40,10 +40,13 @@ from annotated_text import annotated_text
 
 nlp = spacy.load("en_core_web_sm")
 
+VECTOR_DB_PATHS = {
+                'IT Support' : Path('../vectorstore_IT'), 
+                'Doc Assistant' : Path('../vectorstore_test'),
+                    }
+# LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
 
-LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
-
-PERSIST_DIRECTORY = Path('../vectorstore_test')
+# PERSIST_DIRECTORY = Path('../vectorstore_test')
 TMP_DIR = Path(__file__).resolve().parent.parent.joinpath('data', 'tmp')
 os.makedirs(TMP_DIR, exist_ok=True)
 
@@ -63,9 +66,12 @@ def split_documents(documents):
 
 def create_vector_db(texts):
     #vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
-    vectordb = Chroma(persist_directory=PERSIST_DIRECTORY.as_posix(), embedding_function=HuggingFaceEmbeddings())
+    vectordb = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
     #vectordb.persist()
     return vectordb
+
+def update_vector_db():
+    st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
 
 
 def setup_llms():
@@ -135,7 +141,8 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
 
 def query_chain():
     query_text = st.session_state.current_input
-    sources = set([val['source'] for val in st.session_state.vector_db.get()['metadatas']])
+    update_vector_db()
+
     k = st.session_state.search_k if st.session_state.search_k else 3  
     retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
 
@@ -160,10 +167,10 @@ def query_chain():
         result = st.session_state.document_chain.invoke({'input':resp_string, 
                                                 'context':docs})
 
-        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=3)
+        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
         anno_result = ""
         for sent, score in zip(resp_sent, scores):
-            if score < 0.2: #0 is no hallu, 1 is hallu
+            if score > 0.3: #0 is no hallu, 1 is hallu
                 sent = f":red-background[{sent}]"
             anno_result += sent 
         #result = anno_result
@@ -193,8 +200,8 @@ def input_fields():
     
     st.session_state.llm = 'llama3'
     with st.sidebar:
-
         st.session_state.llm = st.selectbox('Select an LLM', ['llama3', 'claude'], index=0)
+        st.session_state.func = st.selectbox('Select function', ['IT Support', 'Doc Assistant'], index=0)
         st.session_state.conversation_response = st.toggle("Enable conversaion", value=False)
         k_list = [3,4,5,6,7]
         st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
