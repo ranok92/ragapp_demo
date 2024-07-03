@@ -16,8 +16,8 @@ from langchain_anthropic import AnthropicLLM
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 
-from langchain.document_loaders import DirectoryLoader
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma 
 from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
 
@@ -29,7 +29,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from prompts.prompt_template import *
 from utils.utils import *
 import ipdb 
-
+import glob
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -53,14 +53,18 @@ os.makedirs(TMP_DIR, exist_ok=True)
 ##############################  backend functions  ###############################
 
 #for the vector store
+
+
 def load_documents():
-    loader = DirectoryLoader(TMP_DIR.as_posix(), glob='**/*.pdf')
-    documents = loader.load()
-    return documents
+    document_list = []
+    doc_files = glob.glob(f'{TMP_DIR.as_posix()}/*.pdf')
+    for doc in doc_files:
+        document_list.extend(PyPDFLoader(doc).load())
+    return document_list
 
 
 def split_documents(documents):
-    text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=20)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=20)
     texts = text_splitter.split_documents(documents)
     return texts
 
@@ -78,7 +82,7 @@ def setup_llms():
 
     if st.session_state.llm=='llama3':
         st.session_state.llm_model_chat = Ollama(model='llama3', system='You are a helpful question answering bot.')
-        st.session_state.llm_model_instruct = Ollama(model='llama3', system="You are an LLM that is excellent at following instructions")
+        st.session_state.llm_model_instruct = Ollama(model='llama3', system="You are an LLM that is excellent at following instructions.")
     
     if st.session_state.llm=='claude':
         return AnthropicLLM(model='claude-2.1')
@@ -109,9 +113,14 @@ def setup_llm_chains():
 
     #build the router chain
     router_prompt = PromptTemplate(
-        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE
+        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_2
     )
     st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+
+    #setup the email writing chain
+    email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
+    st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
+
 
 
 def check_sentence_hallucination(query, context, response, sample_size=5):
@@ -140,6 +149,8 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
 
 
 def query_chain():
+    #run the email chain
+
     query_text = st.session_state.current_input
     update_vector_db()
 
@@ -150,11 +161,12 @@ def query_chain():
 
     #check if retrieval is required
     resp = st.session_state.router_chain.invoke({'input': query_text})
+    print("***RESPONSE QA : ", resp['answer'])
     is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
     
     input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
     
-    if is_qa.strip().lower()=='yes':
+    if is_qa.strip().lower()=='qa':
 
         #rephrase question using history
         resp = st.session_state.rephrase_chain.invoke(input_dict)
@@ -166,7 +178,9 @@ def query_chain():
         #get answer using relevant documents and question
         result = st.session_state.document_chain.invoke({'input':resp_string, 
                                                 'context':docs})
+        
 
+        #annotate the response with hallucination information
         resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
         anno_result = ""
         for sent, score in zip(resp_sent, scores):
@@ -181,19 +195,30 @@ def query_chain():
         st.session_state.response = anno_result
         st.session_state.response_context = docs
 
-    else:
+    if is_qa.strip().lower()=='conv':
         result = st.session_state.conv_chain.invoke(input_dict)
         anno_result = result['answer']
         st.session_state.response = result
-        st.session_state.response_context = "NO CONTEXT FOR REGULAR CHAT"    
+        st.session_state.response_context = ""    
+    
+    if is_qa.strip().lower()=='writing':
+        resp = st.session_state.rephrase_chain.invoke(input_dict)
+        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+        print("**********Rephrased input :", resp_string)
+        result = st.session_state.email_chain.invoke({'input':resp_string})
+        anno_result = result['answer']
+        st.session_state.response = result
+        st.session_state.response_context = ""    
     
     #save the query in the chat history
     st.session_state.messages.append({"speaker" : "user", "content": query_text})
     
-    #annotate the response with hallucination information
+    # rel_sources = [doc.metadata['source'] for doc in docs]
+    # rel_pages = [doc.metadata['page'] for doc in docs]
+    # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
     st.session_state.messages.append({"speaker" : "AI",
-                                       "content": anno_result})
-  
+                                    "content": anno_result})
+    
 
 ################################  front end functions  ################################
 def input_fields():
@@ -202,11 +227,11 @@ def input_fields():
     with st.sidebar:
         st.session_state.llm = st.selectbox('Select an LLM', ['llama3', 'claude'], index=0)
         st.session_state.func = st.selectbox('Select function', ['IT Support', 'Doc Assistant'], index=0)
-        st.session_state.conversation_response = st.toggle("Enable conversaion", value=False)
         k_list = [3,4,5,6,7]
         st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
 
-    st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
+        st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
+        st.button("Submit documents", on_click=process_documents)
 
 def get_session_chat_history():
     chat_list = st.session_state.messages 
@@ -218,7 +243,7 @@ def get_session_chat_history():
             chat_history.append(AIMessage(content=conv['content']))
     return chat_history
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def process_documents():
     if not st.session_state.source_docs:
         st.warning(f"Please upload the documents first.")
@@ -230,16 +255,19 @@ def process_documents():
                                              suffix='.pdf') as tmp_file:
                 tmp_file.write(source_doc.read())
         
-        documents = load_documents()
+        with st.spinner("Loading documents . . ."):
+            documents = load_documents()
         #
         for _file in TMP_DIR.iterdir():
             temp_file = TMP_DIR.joinpath(_file)
             temp_file.unlink()
         #
-        texts = split_documents(documents)
+        with st.spinner("Parsing text . . ."):
+            texts = split_documents(documents)
             #
         k = st.session_state.search_k if st.session_state.search_k else 7
-        st.session_state.vector_db =  create_vector_db(texts)   
+        with st.spinner("Building database . . "):
+            st.session_state.vector_db =  create_vector_db(texts)   
 
 def main():
     # page title
@@ -250,8 +278,7 @@ def main():
     input_fields()
     setup_llms()
     setup_llm_chains()
-
-    st.button("Submit documents", on_click=process_documents)
+    print(st.session_state.source_docs)
 
 
     # question_list = [
