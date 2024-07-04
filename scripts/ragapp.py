@@ -2,7 +2,6 @@
 import os, tempfile
 from pathlib import Path
 os.path.join('..')
-os.environ['ANTHROPIC_API_KEY'] = "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"
 import streamlit as st
 import pytesseract
 
