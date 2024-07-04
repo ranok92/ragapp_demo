@@ -5,6 +5,14 @@ ROUTER_PROMPT_TEMPLATE = "Given an input, decide whether responding to it would 
                     Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'yes' or 'no."
 
 
+ROUTER_PROMPT_TEMPLATE_2 = "Given an input, decide whether responding to it would require fact based question answering capabilitesl, a part of a general conversation or require.\
+                    assistance with creative writing. \n Here is the input \n\n {input}.\n\n Repond with one word: 'qa', 'conv' or 'writing'. 'qa', if you think it \
+                    would require fact based question answering capabilities, 'conv', if you think it is a part of a regular conversation and 'writing' if you understand that \
+                    the input is requesting help with creative writing. \n \
+                    Explain your answer.\n \
+                    Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'qa', 'conv' or 'writing'."
+
+
 CONV_PROMPT_TEMPLATE = "You are a helpful bot who can hold a polite conversation with a fellow human. \
                         You will be provided with a history of messages. Based on that you need to form a final \
                         response. Try not to be too wordy.\n\n \n\n \
@@ -35,3 +43,12 @@ DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
  context:\\n The context: \\n{context}"),
 ("user","{input}"),
 ])
+
+RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provided.\n \
+         If you don't know the answer just say you dont know. Do not try to come up with something. \n \
+         Keep your answer brief and to the point. \n\n \
+         The context: {context} \n \
+         Human's question: {input}"
+
+EMAIL_PROMPT_TEMPLATE= "Help the user write an email based on the user query provided below. \n \
+        User query: {input} \n"
