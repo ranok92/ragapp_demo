@@ -14,8 +14,10 @@ from folium.plugins import Realtime
 from streamlit_folium import st_folium
 from folium import JsCode
 import pandas_geojson as pdg
+from utils.utils import *
 
-def get_geojson_from_df(regular_df):
+
+def get_geojson_from_df(regular_df, t):
     '''
     returns a df that can be converted to geojson df
     regular df has the following columns 	
@@ -36,9 +38,11 @@ def get_geojson_from_df(regular_df):
                                      ,coordinate_col='coordinates'
                                      ,property_col_list=property_cols
                                      )
-    print(regular_df, geo_json)
-    return geo_json
+ 
+    print("called at ", t)
+    print(regular_df['location'])
 
+    return geo_json
 
 st.set_page_config(
     page_title="Telecom Dashboard",
@@ -49,7 +53,6 @@ st.set_page_config(
 # read csv from a github repo
 dataset_url = "../data/dashboard_data.csv"
 KPI_LIST = ['kpi1', 'kpi2']
-
 
 # read csv from a URL
 @st.cache_data
@@ -67,12 +70,6 @@ kpi_filter = st.selectbox("Select a KPI", KPI_LIST)
 
 
 #create the map container
-
-# st.markdown("### Anomaly detection")
-# #kpi_anomaly = alt.Chart(df_chart).mark_line().transform_fold(fold=[f'{kpi_filter}', f'{kpi_filter}_anomaly']).mark_line().encode(x='timestep', y=alt.Y('value:Q').title("KPI"),color='key:N')
-# kpi_value = alt.Chart(df_chart).mark_line().encode(x='timestep', y=alt.Y(f'{kpi_filter}', title="KPI"))
-# kpi_anomaly = alt.Chart(df_chart).mark_point(color='red').encode(x='timestep', y=f'{kpi_filter}_anomaly')
-# st.altair_chart((kpi_value+kpi_anomaly), use_container_width=True)
 with st.container(height=600):
     m = folium.Map(location=[ df['latitude'].mean(), df['longitude'].mean()], zoom_start=10)
     source= 'http://localhost:8000/dashboard.geojson'
@@ -81,8 +78,9 @@ with st.container(height=600):
         source,  # Local URL to the GeoJSON file
         start=True,  # Automatically start refreshing
         get_feature_id=JsCode("(f) => { return f.properties.objectID; }"),
-        point_to_layer=JsCode("(f, latlng) => { return L.circleMarker(latlng, {radius: 15, fillOpacity: 0.2}); }"),
-        interval=500
+        remove_missing=True,
+        point_to_layer=JsCode("(f, latlng) => { return L.circleMarker(latlng, {radius: f.properties.kpi1*10, fillOpacity: 0.2}); }"),
+        interval=200
     )
     realtime_layer.add_to(m)
     st_folium(m, height=600, use_container_width=True)
@@ -101,11 +99,7 @@ timesteps = max(df['timestep'])
 
 
 for t in range(timesteps):
-
-
-
     ###
-
     df_chart = pd.DataFrame()
     df_chart.insert(0, 'location', df_part['location'])
 
@@ -137,25 +131,14 @@ for t in range(timesteps):
     for i in range(t):
         if df_part[f'{kpi_filter}_anomaly'].iloc[i]==1:
             kpi_data_ano[i] = df_part[f'{kpi_filter}'].iloc[i]
-
-    print(df[(df[f'{kpi_filter}_anomaly']==1) & (df['timestep']==t)])
-    anomaly_geo_data = get_geojson_from_df(df[(df[f'{kpi_filter}_anomaly']==1) & (df['timestep']==t)])
-    pdg.save_geojson(anomaly_geo_data,'../data/geo_data/dashboard.geojson',indent=4)
     df_chart.insert(6, f'{kpi_filter}_anomaly', kpi_data_ano)
 
+    #anomaly for geojson data
+    anomaly_geo_data = get_geojson_from_df(df[(df[f'{kpi_filter}_anomaly']==1) & (df['timestep']==t)], t)
+    pdg.save_geojson(anomaly_geo_data,'../data/geo_data/dashboard.geojson',indent=4)
 
-    # df["age_new"] = df["age"] * np.random.choice(range(1, 5))
-    # df["balance_new"] = df["balance"] * np.random.choice(range(1, 5))
 
-    # # creating KPIs
-    # avg_age = np.mean(df["age_new"])
 
-    # count_married = int(
-    #     df[(df["marital"] == "married")]["marital"].count()
-    #     + np.random.choice(range(1, 30))
-    # )
-
-    # balance = np.mean(df["balance_new"])
 
     with graph_placeholder.container(height=450):
 
@@ -163,28 +146,21 @@ for t in range(timesteps):
         fig_col1, fig_col2 = st.columns(2)
         with fig_col1:
             st.markdown("### Time series forecasting")
-            #st.line_chart(df_chart, y=[f'{kpi_filter}_pred_mean', f'{kpi_filter}'])
-            # kpi_line = (alt.Chart(df_chart).mark_line(opacity=1, color='green').encode(x='timestep', y=alt.Y(f'{kpi_filter}', title="Actual")))
-            # kpi_line_pred = (alt.Chart(df_chart).mark_line(opacity=0.5, color='pink').encode(x='timestep', y=f'{kpi_filter}_pred_mean'))
             kpi_lines = alt.Chart(df_chart).mark_line().transform_fold(fold=[f'{kpi_filter}', f'{kpi_filter}_pred_mean']).mark_line().encode(x='timestep', y=alt.Y('value:Q').title("KPI"),color='key:N')
 
             pred_band = (alt.Chart(df_chart).mark_area(opacity=0.3, color= 'azure').encode(x='timestep', 
                                                                 y=alt.Y(f'{kpi_filter}_pred_upper:Q').title(""),
                                                                 y2=alt.Y2(f'{kpi_filter}_pred_lower:Q').title("")))
-
             st.altair_chart((kpi_lines+pred_band), use_container_width=True)
     
-
         with fig_col2:
             st.markdown("### Anomaly detection")
-            #kpi_anomaly = alt.Chart(df_chart).mark_line().transform_fold(fold=[f'{kpi_filter}', f'{kpi_filter}_anomaly']).mark_line().encode(x='timestep', y=alt.Y('value:Q').title("KPI"),color='key:N')
             kpi_value = alt.Chart(df_chart).mark_line().encode(x='timestep', y=alt.Y(f'{kpi_filter}', title="KPI"))
             kpi_anomaly = alt.Chart(df_chart).mark_point(color='red').encode(x='timestep', y=f'{kpi_filter}_anomaly')
             st.altair_chart((kpi_value+kpi_anomaly), use_container_width=True)
         
-    with df_placeholder.container():
-        st.markdown("### Detailed Data View")
-
+    with df_placeholder.container(height=400):
+        st.markdown("### Full Data View")
         st.dataframe(df_part[df_part['timestep']<=t][['location','timestep',f'{kpi_filter}', f'{kpi_filter}_anomaly']])
     
     time.sleep(3)
