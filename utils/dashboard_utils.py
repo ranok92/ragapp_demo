@@ -31,6 +31,8 @@ def get_geojson_from_df(regular_df, t):
     '''
     coord = [[long, lat] for long, lat in zip(regular_df['longitude'], regular_df['latitude'])]
     regular_df = regular_df.drop(columns=['latitude', 'longitude', 'timestamp'])
+    regular_df = regular_df.dropna(axis=1)
+    #drop NA columns
     regular_df['type'] = ['Point']*len(regular_df)
     regular_df['objectID'] = [str(i) for i in range(len(regular_df))]
 
