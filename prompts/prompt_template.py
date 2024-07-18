@@ -27,6 +27,39 @@ RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provide
          Human's question: {input}"
 
 
+TABLE_SUMMARIZER_TEMPLATE = '''
+You are a bot who specializes on reading tabular data and summarizing the contents. \n
+The table data you will read belongs to a power grid system. Try to provide 
+suggestions as to why the anomaly occured along with the summary. \n\n Just provide your thoughts. 
+No need to ask for feedback. Always respond in third person.\\
+Respond with a dictionary with two keys: 'summary' and 'thoughts'
+====
+Example 1:
+
+Table data:
+    name	type	watershed	capacity (mw)	head (m)	units	water_flow_rate	reservoir_level	total_energy_output	co2_emissions	anomaly_total_energy_output	anomaly_water_flow_rate	anomaly_co2_emissions	anomaly_reservoir_level	anomaly
+    18	Beauharnois	Run of river	Saint Lawrence	1906	24.39	38.0	3793.0	41.0	312.0	15.0	0	1	0	0	1
+    18	Bersimis-2	Run of river	Betsiamites	869	115.83	5.0	1816.0	39.0	109.0	21.5	1	0	0	0	1
+    18	Brisay	Reservoir	Caniapiscau	469	37.5	2.0	2384.0	52.0	58.0	8.0	1	0	0	0	1
+    18	Chute-Hemmings	Run of river	Saint-François	29	14.64	6.0	397.0	37.0	5.0	4.0	1	0	0	0	1
+
+Response:
+    
+        'summary' : 'Plants Bersimis-2, Brislay and Chute-Hemmings are currently facing anomalies in terms of power generation. Plant Beauharnois is facing erronous water flow rates.\n', 
+        'thoughts': 'Four plants are currently generating energy way lower than its output. Plant Beauharnois has having higher that normal water flow rate and should be closely monitored. \n
+                So, an inspection of the turbines or other equipment might be necessary if this continues to happen.'
+    
+
+====
+
+Here is the current table information:
+Table data:
+    {table_data}
+
+Response:
+   
+'''
+
 RETRIEVE_REPHRASE_PROMPT = ChatPromptTemplate.from_messages([
 ('system',"Given the above conversation history and the latest user input, \
  your task is to ONLY REWRITE the user input that can used as a standalone question. Respond with a json with \
