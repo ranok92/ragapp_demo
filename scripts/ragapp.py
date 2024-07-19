@@ -40,9 +40,10 @@ from annotated_text import annotated_text
 nlp = spacy.load("en_core_web_sm")
 
 VECTOR_DB_PATHS = {
-                'IT Support' : Path('../vectorstore_IT'), 
-                'Doc Assistant' : Path('../vectorstore_test'),
+                'Public' : Path('../vectorstores/energy_public'), 
+                'Private' : Path('../vectorstores/energy_private'),
                     }
+
 # LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
 
 # PERSIST_DIRECTORY = Path('../vectorstore_test')
@@ -68,9 +69,14 @@ def split_documents(documents):
     return texts
 
 def create_vector_db(texts):
-    #vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
+    vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
     vectordb = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
     #vectordb.persist()
+    return vectordb
+
+
+def load_vector_db(path):
+    vectordb = Chroma(persist_directory=path.as_posix(), embedding_function=HuggingFaceEmbeddings())
     return vectordb
 
 def update_vector_db():
@@ -290,14 +296,15 @@ def main():
     # App logic
     uploaded_file = st.session_state.source_docs
 
-    st.chat_input(placeholder = 'Enter query here ...', 
-                            disabled=not uploaded_file, 
-                            on_submit=query_chain,
-                            key='current_input')
-    
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    
+
+    st.chat_input(placeholder = 'Enter query here ...', 
+                    disabled=not uploaded_file, 
+                    on_submit=query_chain,
+                    key='current_input')
+
     with st.container(height=500):
         #display the chat history so far
         for msg in st.session_state.messages:
