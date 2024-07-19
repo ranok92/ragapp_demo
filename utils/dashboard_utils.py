@@ -58,3 +58,10 @@ background-image: linear-gradient(167deg, rgba(233,125,139,1) 0%, rgba(255,255,2
 </style>
 """
 
+icon_create_function = '''
+            function(cluster) {
+            return L.divIcon({html: '<b style="text-align:center; font-size:20px; color: red">' + cluster.getChildCount() + '</b>',
+                              className: 'marker-cluster marker-cluster-large',
+                              iconSize: "auto"});
+            }
+            '''
