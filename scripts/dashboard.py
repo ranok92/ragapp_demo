@@ -9,7 +9,7 @@ from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
 import altair as alt
 import folium
-from folium.plugins import Realtime
+from folium.plugins import Realtime, MarkerCluster
 from streamlit_folium import st_folium
 from folium import JsCode
 
@@ -120,17 +120,18 @@ if authentication_status:
                 st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
 
                 m = folium.Map(location=[ full_data_df['latitude'].mean(), full_data_df['longitude'].mean()], zoom_start=10)
-                source= 'http://localhost:8000/anomalous.geojson'
-
-                realtime_layer = Realtime(
-                    source,  # Local URL to the GeoJSON file
+                source_anomaly= 'http://localhost:8000/anomalous.geojson'
+                container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
+                realtime_layer_anomaly = Realtime(
+                    source_anomaly,  # Local URL to the GeoJSON file
                     start=True,  # Automatically start refreshing
                     get_feature_id=JsCode("(f) => { return f.properties.objectID}"),
                     remove_missing=True,
-                    point_to_layer=JsCode("(f, latlng) => { return L.circleMarker(latlng, {radius: 30, fillOpacity: 1, color: '#cf1313', fillColor: '#cf1313'}); }"),
+                    container=container,
+                    point_to_layer=JsCode("(f, latlng) => { return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313'}); }"),
                     interval=200
                 )
-                realtime_layer.add_to(m)
+                realtime_layer_anomaly.add_to(m)
                 st_folium(m, height=600, use_container_width=True)
 
             col1, col2 = st.columns(2)
