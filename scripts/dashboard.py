@@ -168,7 +168,10 @@ if authentication_status:
             with st.popover("Show files"):
                 metadatas = st.session_state.vector_db.get()['metadatas']
                 all_files = list(set([entry['source'] for entry in metadatas]))
-                mark_down_text = '- '.join(all_files)
+                mark_down_text = ''
+                for f in all_files:
+                    mark_down_text+= '- '+f+'\n'
+                print(mark_down_text)
                 st.markdown(mark_down_text)
 
             uploaded_file = st.session_state.source_docs
