@@ -232,7 +232,7 @@ if authentication_status:
                         weekly_kpi_data = get_weekly_data(full_data_df, historic_chart_kpi, t)
                         print(weekly_kpi_data)
                         kpi_lines = alt.Chart(weekly_kpi_data).mark_line().encode(x='timestamp', y=alt.Y(f'{historic_chart_kpi}').title(historic_chart_kpi))
-                        pred_band = (alt.Chart(df_alt_chart).mark_area(opacity=0.7, color= 'azure').encode(alt.X("timestamp").title("Hour"), 
+                        pred_band = (alt.Chart(df_alt_chart).mark_area(opacity=0.4, color= 'blue').encode(alt.X("timestamp").title("Hour"), 
                                                                             y=alt.Y(f'{historic_chart_kpi}_max:Q').title(""),
                                                                             y2=alt.Y2(f'{historic_chart_kpi}_min:Q').title("")))
                         st.altair_chart((kpi_lines+pred_band), use_container_width=True)
@@ -363,7 +363,7 @@ if authentication_status:
                 with indiv_plant_row2.container(height=500, border=True):
                     
 
-                    indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='small')
+                    indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
                     
                     with indiv_plant_row2_col1:
                         
