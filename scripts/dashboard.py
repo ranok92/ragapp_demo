@@ -30,7 +30,7 @@ from scripts.ragapp import setup_llms, setup_llm_chains, \
                             process_documents, load_documents, \
                             split_documents, load_vector_db, \
                             update_vector_db
-
+REFRESH_TIMER = 2
 # ---- SET UP THE LLMS ----
 def build_llm_infrastructure():
     system_prompt = '''
@@ -55,25 +55,29 @@ def build_llm_infrastructure():
 def draw_realtime_map():
 
     st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
-
     m = folium.Map(location=[st.session_state.cur_data_df['latitude'].mean(), st.session_state.cur_data_df['longitude'].mean()], zoom_start=10)
     source_anomaly= 'http://localhost:8000/anomalous.geojson'
     container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
+    pt_layer_func = JsCode('''(f, latlng) => { 
+                                var rad = f.properties.units*2
+                                return L.circleMarker(latlng, {radius: rad, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(f.properties.name); }
+                           
+                           ''')
     realtime_layer_anomaly = Realtime(
         source_anomaly,  # Local URL to the GeoJSON file
         start=True,  # Automatically start refreshing
         get_feature_id=JsCode("(f) => { return f.properties.objectID}"),
         remove_missing=True,
         container=container,
-        point_to_layer=JsCode("(f, latlng) => { return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313'}); }"),
-        interval=200
+        point_to_layer=pt_layer_func,
+        interval=2000
     )
     realtime_layer_anomaly.add_to(m)
     st_folium(m, height=600, use_container_width=True)
 
 # ----- Plot historic line chart for a given KPI -----
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
     st.markdown("<h2 style='text-align: center; color: blue;'> Daily Trend </h2>", unsafe_allow_html=True)
     weekly_kpi_data = get_weekly_data(st.session_state.full_data_df, historic_chart_kpi, st.session_state.cur_timestamp)
@@ -87,7 +91,7 @@ def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
 
 # -----  Plot instantaneous barchart ---- 
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_instantaneous_barchart(bar_chart_kpi):
     print("CUR TImestep: ", st.session_state.cur_timestamp)
     bar_chart_max = {'co2_emissions' : 20, 'reservoir_level' : 80, 'water_flow_rate' : 3300, 'total_energy_output' : 1000}
@@ -106,50 +110,56 @@ def plot_instantaneous_barchart(bar_chart_kpi):
 
 # ----- Writing the summarization columns -----
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def write_anomalies():
     t = st.session_state.cur_timestamp
     st.markdown("<h2 style='text-align: center; color: blue;'> Anomalies registered </h2>", unsafe_allow_html=True)
     ano_col1, ano_col2, ano_col3, ano_col4 = st.columns(4)
     with ano_col1:
+        st.html(f'<span class="anomaly_cards"></span>')
         power_ano = sum(st.session_state.cumm_data_df['anomaly_total_energy_output'])
         st.markdown("<h5 style='text-align: center; color: black;'>Power output</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h6 style='text-align: center; color: red;'> {power_ano} </h6>", unsafe_allow_html=True)
+        st.write(f"<h6 style='text-align: center; color: red;'> {power_ano} </h6>", unsafe_allow_html=True)
     with ano_col2:
+        st.html(f'<span class="anomaly_cards"></span>')
         reserv_ano = sum(st.session_state.cumm_data_df['anomaly_reservoir_level'])
         st.markdown("<h5 style='text-align: center; color: black;'>Reservoir level</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h6 style='text-align: center; color: red;'> {reserv_ano} </h6>", unsafe_allow_html=True)
+        st.write(f"<h6 style='text-align: center; color: red;'> {reserv_ano} </h6>", unsafe_allow_html=True)
     with ano_col3:
+        st.html(f'<span class="anomaly_cards"></span>')
         co2_ano = sum(st.session_state.cumm_data_df['anomaly_co2_emissions'])
         st.markdown("<h5 style='text-align: center; color: black;'>C02 level</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h6 style='text-align: center; color: red;'> {co2_ano} </h6>", unsafe_allow_html=True)
+        st.write(f"<h6 style='text-align: center; color: red;'> {co2_ano} </h6>", unsafe_allow_html=True)
     with ano_col4:
+        st.html(f'<span class="anomaly_cards"></span>')
         flow_ano = sum(st.session_state.cumm_data_df['anomaly_water_flow_rate'])
         st.markdown("<h5 style='text-align: center; color: black;'>Water flow rate</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h6 style='text-align: center; color: red;'> {flow_ano} </h6>", unsafe_allow_html=True)
+        st.write(f"<h6 style='text-align: center; color: red;'> {flow_ano} </h6>", unsafe_allow_html=True)
 
 # --- Writing the llm summarization of current data ---- 
-# @st.experimental_fragment(run_every=4)
-# def write_llm_summarization():
-#     if 'last_summarization_timestamp' not in st.session_state.keys():
-#         st.session_state.last_summarization_timestamp = None
-#     if st.session_state.last_summarization_timestamp!=st.session_state.cur_timestamp:
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def write_llm_summarization():
+    if 'last_summarization_timestamp' not in st.session_state.keys():
+        st.session_state.last_summarization_timestamp = None
+    if st.session_state.last_summarization_timestamp!=st.session_state.cur_timestamp:
         
-#         st.markdown("<h4 style='text-align: center; color: blue;'> System Summary </h4>", unsafe_allow_html=True)
-#         cur_df = st.session_state.cur_data_df[st.session_state.cur_data_df['anomaly']==1]
-#         max_val = min(5, len(cur_df))
-#         if max_val>0:
-#             resp = st.session_state.llm_chain_summarizer.invoke({'table_data': cur_df.iloc[0:max_val].to_string()})  
-#             st.session_state.last_timestamp_summary = parse_response(resp)
-#             st.write(parse_response(resp))
-#         else:
-#             st.write("All systems running smooth!")
-#         st.session_state.last_summarization_timestamp = st.session_state.cur_timestamp
-#     else:
-#         st.write(st.session_state.last_timestamp_summary)
+        st.markdown("<h4 style='text-align: center; color: blue;'> System Summary </h4>", unsafe_allow_html=True)
+        cur_df = st.session_state.cur_data_df[st.session_state.cur_data_df['anomaly']==1]
+        max_val = min(5, len(cur_df))
+        if max_val>0:
+            with st.spinner('Generating summary . . .'):
+                resp = st.session_state.llm_chain_summarizer.invoke({'table_data': cur_df.iloc[0:max_val].to_string()})  
+                st.session_state.prev_timestamp_summary = parse_response(resp)
+                st.write(parse_response(resp))
+        else:
+            st.write("All systems running smooth!")
+        st.session_state.last_summarization_timestamp = st.session_state.cur_timestamp
+    else:
+        st.markdown("<h4 style='text-align: center; color: blue;'> System Summary </h4>", unsafe_allow_html=True)
+        st.write(st.session_state.prev_timestamp_summary)
 
 # ----- INDIVIDUAL PLANT VIZ TAB -----
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def draw_plant_operational_status(plant_name):
     st.markdown("<h2 style='text-align: center; color: black;'> Operational Status </h2>", unsafe_allow_html=True)
     plant_status = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name]['operational_status'].iloc[0]
@@ -161,7 +171,7 @@ def draw_plant_operational_status(plant_name):
     if plant_status==2:
         st.image('../assets/images/orange_button.png',)
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     timesteps = 167
@@ -200,7 +210,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
                                                         y2=alt.Y2(f'{pred_linechart_kpi}_pred_lower:Q').title("")))
     st.altair_chart((kpi_lines+pred_band), use_container_width=True)
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_gauge_chart(plant_name, 
                      kpi_name, 
                      plot_title= None, 
@@ -210,12 +220,12 @@ def plot_gauge_chart(plant_name,
                      threshold=90):
         #gauge chart for reservoir level
         t = st.session_state.cur_timestamp
-        print("T-1 timestamp :", t-1)
+        t_prev = t-1
 
         res_level = st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name][kpi_name].iloc[0]
         if t > 0:
             past_res_level = st.session_state.cumm_data_df[(st.session_state.cumm_data_df['name']==plant_name) & \
-                                                           (st.session_state.cumm_data_df['timestamp']==(t-1))][kpi_name].iloc[0]
+                                                           (st.session_state.cumm_data_df['timestamp']==t_prev)][kpi_name].iloc[0]
         else:
             past_res_level = res_level
 
@@ -232,7 +242,7 @@ def plot_gauge_chart(plant_name,
                     'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': threshold}}))
         st.plotly_chart(fig)
 
-@st.experimental_fragment(run_every=2)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def build_indiv_plant_tab():
 
     pred_linechart_kpi = 'total_energy_output'
@@ -340,16 +350,22 @@ def build_doc_assistant_tab():
             for doc in st.session_state.response_context:
                 st.write(doc)
 
-@st.experimental_fragment(run_every=4)
+@st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data() -> pd.DataFrame:
     st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url)
+    st.session_state.cur_timestamp = st.session_state.cur_data_df['timestamp'].iloc[0]
+
     if 'cumm_data_df' not in st.session_state.keys():
         st.session_state.cumm_data_df = st.session_state.cur_data_df
+        st.session_state.prev_timestamp = st.session_state.cur_timestamp
     else:
-        st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df])
+        if st.session_state.prev_timestamp!=st.session_state.cur_timestamp:
+            st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df])
+            st.session_state.prev_timestamp = st.session_state.cur_timestamp
 
-    st.session_state.cur_timestamp = st.session_state.cur_data_df['timestamp'].iloc[0]
+
     print("UNIQUE TIMESTAMPS :", st.session_state.cumm_data_df['timestamp'].unique())
+
 def get_data_full():
     st.session_state.full_data_df = pd.read_csv(st.session_state.dataset_url)
 
@@ -362,6 +378,8 @@ def main():
         page_icon="✅",
         layout="wide",
     )
+    st.html("../styles.html")
+
     st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
