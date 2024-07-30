@@ -243,7 +243,9 @@ def plot_gauge_chart(plant_name,
                         {'range': mid_range, 'color': "gray"}],
                     'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': threshold}}))
         fig.update_layout(
-            height=300,
+            height=130,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             margin=dict(t=1, l=0, b=0, r=0, pad=0),
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -267,16 +269,14 @@ def build_indiv_plant_kpi_card(plant_name, kpi_name,
     kpi_max = kpi_past_24_data[kpi_name].max()
     kpi_min = kpi_past_24_data[kpi_name].min()
 
-    print("LEN :", len(kpi_past_24_data[kpi_name]))
     #build the gauge chart
-    with st.container(height=200):
-        plot_gauge_chart(plant_name, 
-                        kpi_name, 
-                        plot_title, 
-                        full_range=full_range, 
-                        low_range=low_range, 
-                        mid_range=mid_range, 
-                        threshold=threshold)
+    plot_gauge_chart(plant_name, 
+                    kpi_name, 
+                    plot_title=None, 
+                    full_range=full_range, 
+                    low_range=low_range, 
+                    mid_range=mid_range, 
+                    threshold=threshold)
     st.write("Past 24 hr")
 
     daily_stat_min, daily_stat_max = st.columns(2)
@@ -284,20 +284,20 @@ def build_indiv_plant_kpi_card(plant_name, kpi_name,
         st.write(f"Min\n{kpi_min}")
     with daily_stat_max:
         st.write(f"Max\n{kpi_max}")
-    with st.container(height=200):
-        st.html(f'<span class="indiv_kpi_chart"></span>')
-        fig_spark = go.Figure(go.Scatter(x=kpi_past_24_data['timestamp'], 
-                                   y=kpi_past_24_data[kpi_name],
-                                    mode='lines'))
-        fig_spark.update_xaxes(visible=False, fixedrange=True)
-        fig_spark.update_yaxes(visible=False, fixedrange=True)
-        fig_spark.update_layout(
-            showlegend=False,
-            plot_bgcolor="white",
-            height=50,
-            margin=dict(t=10, l=0, b=0, r=0, pad=0),
-        )
-        st.plotly_chart(fig_spark, use_container_width=True)
+
+    st.html(f'<span class="indiv_kpi_chart"></span>')
+    fig_spark = go.Figure(go.Scatter(x=kpi_past_24_data['timestamp'], 
+                                y=kpi_past_24_data[kpi_name],
+                                mode='lines'))
+    fig_spark.update_xaxes(visible=False, fixedrange=True)
+    fig_spark.update_yaxes(visible=True, fixedrange=True)
+    fig_spark.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=100,
+        margin=dict(t=10, l=0, b=0, r=0, pad=0),
+    )
+    st.plotly_chart(fig_spark)
     
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
@@ -570,15 +570,19 @@ def main():
 
                     indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
                     
-                    with indiv_plant_row2_col1:
+                    with indiv_plant_row2_col1.container(border=True):
                         
                         #gauge chart for reservoir_level
                         #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
+                        st.markdown("<h4 style='text-align: center; color: black;'> Reservoir Level </h4>", unsafe_allow_html=True)
                         build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
-                    with indiv_plant_row2_col2:
+
+                    with indiv_plant_row2_col2.container(border=True):
                         
                         #gauge chart for co2 emissions
-                        plot_gauge_chart(plant_name, 
+                        st.markdown("<h4 style='text-align: center; color: black;'> CO2 Emissions </h4>", unsafe_allow_html=True)
+
+                        build_indiv_plant_kpi_card(plant_name, 
                                         'co2_emissions', 
                                         plot_title='CO2 Emissions', 
                                         full_range=[0, 24],
@@ -586,8 +590,10 @@ def main():
                                         mid_range=[10, 20],
                                         threshold=22)
 
-                    with indiv_plant_row2_col3:
+                    with indiv_plant_row2_col3.container(border=True):
                         
+                        st.markdown("<h4 style='text-align: center; color: black;'> Water flow rate </h4>", unsafe_allow_html=True)
+
                         #gauge chart for water_flow_level
                         system_cap =  st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name]['capacity (mw)'].iloc[0]
                         if system_cap < 10:
@@ -604,7 +610,7 @@ def main():
                         gray_range = [20*water_flow_multiplier, 50*water_flow_multiplier]
                         threshold = 65*water_flow_multiplier
 
-                        plot_gauge_chart(plant_name, 
+                        build_indiv_plant_kpi_card(plant_name, 
                                         'water_flow_rate', 
                                         plot_title='Water flow rate', 
                                         full_range=gauge_range,
