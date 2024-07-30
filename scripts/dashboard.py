@@ -7,6 +7,7 @@ import pandas as pd  # read csv, df manipulation
 import streamlit as st  # 🎈 data web app development
 from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
+
 import altair as alt
 import folium
 from folium.plugins import Realtime, MarkerCluster
@@ -51,7 +52,7 @@ def build_llm_infrastructure():
 # ---- FUNCTIONS FOR GRID OVERVIEW TAB ------
 # ---- Draw realtime map ----- 
 
-
+ 
 def draw_realtime_map():
 
     st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
@@ -60,7 +61,8 @@ def draw_realtime_map():
     container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
     pt_layer_func = JsCode('''(f, latlng) => { 
                                 var rad = f.properties.units*2
-                                return L.circleMarker(latlng, {radius: rad, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(f.properties.name); }
+                                var popup_msg = 'Plant Name ' + f.properties.name + "<br>" + 'Plant Capacity :' + f.properties.units
+                                return L.circleMarker(latlng, {radius: rad, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg); }
                            
                            ''')
     realtime_layer_anomaly = Realtime(
@@ -80,7 +82,7 @@ def draw_realtime_map():
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
     st.markdown("<h2 style='text-align: center; color: blue;'> Daily Trend </h2>", unsafe_allow_html=True)
-    weekly_kpi_data = get_weekly_data(st.session_state.full_data_df, historic_chart_kpi, st.session_state.cur_timestamp)
+    weekly_kpi_data = get_weekly_data(st.session_state.full_data_df, historic_chart_kpi, st.session_state.timestamps[-1])
     print(weekly_kpi_data)
     kpi_lines = alt.Chart(weekly_kpi_data).mark_line().encode(x='timestamp', y=alt.Y(f'{historic_chart_kpi}').title(historic_chart_kpi))
     pred_band = (alt.Chart(df_historic_weekly_minmax).mark_area(opacity=0.4, color= 'blue').encode(alt.X("timestamp").title("Hour"), 
@@ -93,7 +95,7 @@ def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_instantaneous_barchart(bar_chart_kpi):
-    print("CUR TImestep: ", st.session_state.cur_timestamp)
+    print("CUR TImestep: ", st.session_state.timestamps[-1])
     bar_chart_max = {'co2_emissions' : 20, 'reservoir_level' : 80, 'water_flow_rate' : 3300, 'total_energy_output' : 1000}
     st.markdown("<h2 style='text-align: center; color: blue;'> KPIs monitoring </h2>", unsafe_allow_html=True)
     realtime_bar = alt.Chart(st.session_state.cur_data_df).mark_bar().encode(
@@ -112,7 +114,7 @@ def plot_instantaneous_barchart(bar_chart_kpi):
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def write_anomalies():
-    t = st.session_state.cur_timestamp
+    t = st.session_state.timestamps[-1]
     st.markdown("<h2 style='text-align: center; color: blue;'> Anomalies registered </h2>", unsafe_allow_html=True)
     ano_col1, ano_col2, ano_col3, ano_col4 = st.columns(4)
     with ano_col1:
@@ -141,7 +143,7 @@ def write_anomalies():
 def write_llm_summarization():
     if 'last_summarization_timestamp' not in st.session_state.keys():
         st.session_state.last_summarization_timestamp = None
-    if st.session_state.last_summarization_timestamp!=st.session_state.cur_timestamp:
+    if st.session_state.last_summarization_timestamp!=st.session_state.timestamps[-1]:
         
         st.markdown("<h4 style='text-align: center; color: blue;'> System Summary </h4>", unsafe_allow_html=True)
         cur_df = st.session_state.cur_data_df[st.session_state.cur_data_df['anomaly']==1]
@@ -153,7 +155,7 @@ def write_llm_summarization():
                 st.write(parse_response(resp))
         else:
             st.write("All systems running smooth!")
-        st.session_state.last_summarization_timestamp = st.session_state.cur_timestamp
+        st.session_state.last_summarization_timestamp = st.session_state.timestamps[-1]
     else:
         st.markdown("<h4 style='text-align: center; color: blue;'> System Summary </h4>", unsafe_allow_html=True)
         st.write(st.session_state.prev_timestamp_summary)
@@ -175,7 +177,7 @@ def draw_plant_operational_status(plant_name):
 def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     timesteps = 167
-    t= st.session_state.cur_timestamp
+    t= st.session_state.timestamps[-1]
     plant_power_data_predict_mean = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
     plant_power_data_predict_std = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
     kpi_data = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
@@ -219,16 +221,16 @@ def plot_gauge_chart(plant_name,
                      mid_range=[26, 75], 
                      threshold=90):
         #gauge chart for reservoir level
-        t = st.session_state.cur_timestamp
-        t_prev = t-1
+        t = st.session_state.timestamps[-1]
+        if len(st.session_state.timestamps)>1:
+            t_prev = st.session_state.timestamps[-2]
+        else:
+            t_prev = st.session_state.timestamps[-1]
 
         res_level = st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name][kpi_name].iloc[0]
-        if t > 0:
-            past_res_level = st.session_state.cumm_data_df[(st.session_state.cumm_data_df['name']==plant_name) & \
-                                                           (st.session_state.cumm_data_df['timestamp']==t_prev)][kpi_name].iloc[0]
-        else:
-            past_res_level = res_level
-
+        past_res_level = st.session_state.cumm_data_df[(st.session_state.cumm_data_df['name']==plant_name) & \
+                                                        (st.session_state.cumm_data_df['timestamp']==t_prev)][kpi_name].iloc[0]
+   
         fig = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
             value = res_level,
@@ -240,7 +242,63 @@ def plot_gauge_chart(plant_name,
                         {'range': low_range, 'color': "lightgray"},
                         {'range': mid_range, 'color': "gray"}],
                     'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': threshold}}))
-        st.plotly_chart(fig)
+        fig.update_layout(
+            height=300,
+            margin=dict(t=1, l=0, b=0, r=0, pad=0),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def build_indiv_plant_kpi_card(plant_name, kpi_name, 
+                               plot_title= None, 
+                                full_range=[0, 100], 
+                                low_range=[0,25], 
+                                mid_range=[26, 75], 
+                                threshold=90):
+    t = st.session_state.timestamps[-1]
+    t_min = st.session_state.cumm_data_df['timestamp'].min()
+    t_past_24 = max(t_min, t-24)
+
+    kpi_past_24_data = st.session_state.cumm_data_df[(st.session_state.cumm_data_df['name']==plant_name) & \
+                                                        (st.session_state.cumm_data_df['timestamp']<=t) & \
+                                                          (st.session_state.cumm_data_df['timestamp']>=t_past_24)]
+    
+    kpi_max = kpi_past_24_data[kpi_name].max()
+    kpi_min = kpi_past_24_data[kpi_name].min()
+
+    print("LEN :", len(kpi_past_24_data[kpi_name]))
+    #build the gauge chart
+    with st.container(height=200):
+        plot_gauge_chart(plant_name, 
+                        kpi_name, 
+                        plot_title, 
+                        full_range=full_range, 
+                        low_range=low_range, 
+                        mid_range=mid_range, 
+                        threshold=threshold)
+    st.write("Past 24 hr")
+
+    daily_stat_min, daily_stat_max = st.columns(2)
+    with daily_stat_min:
+        st.write(f"Min\n{kpi_min}")
+    with daily_stat_max:
+        st.write(f"Max\n{kpi_max}")
+    with st.container(height=200):
+        st.html(f'<span class="indiv_kpi_chart"></span>')
+        fig_spark = go.Figure(go.Scatter(x=kpi_past_24_data['timestamp'], 
+                                   y=kpi_past_24_data[kpi_name],
+                                    mode='lines'))
+        fig_spark.update_xaxes(visible=False, fixedrange=True)
+        fig_spark.update_yaxes(visible=False, fixedrange=True)
+        fig_spark.update_layout(
+            showlegend=False,
+            plot_bgcolor="white",
+            height=50,
+            margin=dict(t=10, l=0, b=0, r=0, pad=0),
+        )
+        st.plotly_chart(fig_spark, use_container_width=True)
+    
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def build_indiv_plant_tab():
@@ -353,16 +411,18 @@ def build_doc_assistant_tab():
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data() -> pd.DataFrame:
     st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url)
-    st.session_state.cur_timestamp = st.session_state.cur_data_df['timestamp'].iloc[0]
 
-    if 'cumm_data_df' not in st.session_state.keys():
-        st.session_state.cumm_data_df = st.session_state.cur_data_df
-        st.session_state.prev_timestamp = st.session_state.cur_timestamp
-    else:
-        if st.session_state.prev_timestamp!=st.session_state.cur_timestamp:
+    t = st.session_state.cur_data_df['timestamp'].iloc[0]
+
+    if 'timestamps' not in st.session_state.keys():
+        st.session_state.timestamps = []
+    
+    if t not in st.session_state.timestamps:
+        st.session_state.timestamps.append(t)
+        if 'cumm_data_df' not in st.session_state.keys():
+            st.session_state.cumm_data_df = st.session_state.cur_data_df
+        else:
             st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df])
-            st.session_state.prev_timestamp = st.session_state.cur_timestamp
-
 
     print("UNIQUE TIMESTAMPS :", st.session_state.cumm_data_df['timestamp'].unique())
 
@@ -379,7 +439,7 @@ def main():
         layout="wide",
     )
     st.html("../styles.html")
-
+    st.html("<link rel='stylesheet' type='text/css' href='../leaflet.css' />")
     st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
@@ -513,8 +573,8 @@ def main():
                     with indiv_plant_row2_col1:
                         
                         #gauge chart for reservoir_level
-                        plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
-                        
+                        #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
+                        build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
                     with indiv_plant_row2_col2:
                         
                         #gauge chart for co2 emissions
