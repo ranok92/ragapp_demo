@@ -4,9 +4,11 @@ from pathlib import Path
 import numpy as np  # np mean, np random
 import pandas as pd  # read csv, df manipulation
 
+#--- streamlit and other UI imports 
 import streamlit as st  # 🎈 data web app development
 from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
+from streamlit_timeline import timeline
 
 import altair as alt
 import folium
@@ -17,20 +19,26 @@ from folium import JsCode
 import pandas_geojson as pdg
 
 import plotly.graph_objects as go
+
 import yaml
 from yaml.loader import SafeLoader
+
+#--- llm imports 
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
 
+#---- local imports ----
 from utils.utils import *
 from utils.dashboard_utils import *
 from prompts.prompt_template import *
-from scripts.ragapp import setup_llms, setup_llm_chains, \
-                            check_sentence_hallucination, \
+from scripts.ragapp import  check_sentence_hallucination, \
                             query_chain, get_session_chat_history, \
                             process_documents, load_documents, \
                             split_documents, load_vector_db, \
                             update_vector_db
+
+
 REFRESH_TIMER = 2
 # ---- SET UP THE LLMS ----
 def build_llm_infrastructure():
@@ -38,16 +46,9 @@ def build_llm_infrastructure():
     You are a bot who specializes on reading tabular data, summarizing them and providing insights.
     '''
 
-    st.session_state.llm = 'llama3'
+    st.session_state.llm = 'llama3.1'
 
-    setup_llms()
-    setup_llm_chains()
 
-    llm_summarizer = Ollama(model='llama3', system=system_prompt)
-    summarize_prompt = PromptTemplate(
-        input_variables=["table_data"], template=TABLE_SUMMARIZER_TEMPLATE
-    )
-    st.session_state.llm_chain_summarizer = LLMChain(llm=llm_summarizer, prompt=summarize_prompt)
 
 # ---- FUNCTIONS FOR GRID OVERVIEW TAB ------
 # ---- Draw realtime map ----- 
@@ -299,6 +300,12 @@ def build_indiv_plant_kpi_card(plant_name, kpi_name,
     )
     st.plotly_chart(fig_spark)
     
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def build_anomaly_timeline(plant_name):
+    plant_data = st.session_state.cumm_data_df[st.session_state.cumm_data_df['name']==plant_name]
+    plant_data.rename(columns={'datetime':'start_date'})
+    print(plant_data)
+    timeline(plant_data.to_json())
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def build_indiv_plant_tab():
@@ -368,29 +375,199 @@ def build_indiv_plant_tab():
 
 
 # ----- CHATBOT ASSISTANT TAB -----
-@st.experimental_fragment
+
+def setup_llms():
+
+    st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', system="You are an LLM that is excellent at following instructions.")
+    st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
+
+def setup_llm_chains():
+
+    #build the conversation chain
+    conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
+    st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
+    
+    #build the rephrase chain 
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=RETRIEVE_REPHRASE_PROMPT)
+
+    #build the document chain
+    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, DOCUMENT_CHAIN_PROMPT)
+
+    #build the router chain
+    router_prompt = PromptTemplate(
+        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_3
+    )
+    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+
+    #build the email writing chain
+    email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
+    st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
+
+    #build the table summarizer chain
+    db_summarizer_prompt = PromptTemplate(
+        input_variables=['input'], template=TABLE_SUMMARIZER_TEMPLATE
+    )
+    st.session_state.table_summarizer_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant,
+                                                       prompt=db_summarizer_prompt)
+    
+    #build the nlp to pandas retriever chain
+    nl_to_pandas_prompt = PromptTemplate(
+        input_variables=['input'], template=NL_TO_PANDAS_QUERY_TEMPLATE
+    )
+    st.session_state.pandas_query_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant,
+                                                       prompt=nl_to_pandas_prompt)
+    
+    #build the table data analyzer chain
+    tabular_data_summarizer_prompt = PromptTemplate(
+        input_variables=['table_data'], template=TABLE_SUMMARIZER_TEMPLATE
+    )
+    
+    st.session_state.tabular_data_summarizer_chain = LLMChain(
+                                llm=st.session_state.llm_dashboard_assistant,
+                                prompt=tabular_data_summarizer_prompt
+                                )
+
+
+def query_chain():
+    #run the email chain
+
+    query_text = st.session_state.current_input
+    update_vector_db()
+
+    k = st.session_state.search_k if st.session_state.search_k else 3  
+    retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
+
+    #use chains
+
+    #check if retrieval is required
+    resp = st.session_state.router_chain.invoke({'input': query_text})
+    print("***RESPONSE QA : ", resp['answer'])
+    is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
+    
+    input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
+    
+    if is_qa.strip().lower()=='qa':
+
+        #rephrase question using history
+        resp = st.session_state.rephrase_chain.invoke(input_dict)
+        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+        print("**********Rephrased input :", resp_string)
+        #use response to retrieve relevant documents 
+        docs = retriever.get_relevant_documents(resp_string)
+
+        #get answer using relevant documents and question
+        result = st.session_state.document_chain.invoke({'input':resp_string, 
+                                                'context':docs})
+        
+
+        #annotate the response with hallucination information
+        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
+        anno_result = ""
+        for sent, score in zip(resp_sent, scores):
+            if score > 0.3: #0 is no hallu, 1 is hallu
+                sent = f":red-background[{sent}]"
+            anno_result += sent 
+        #result = anno_result
+        print("Scores ***************", scores)
+        print("RESULT ***************", result)
+        print("RESULT ***************", anno_result)
+
+        st.session_state.response = anno_result
+        st.session_state.response_context = docs
+
+    if is_qa.strip().lower()=='conv':
+        result = st.session_state.conv_chain.invoke(input_dict)
+        anno_result = result['answer']
+        st.session_state.response = result
+        st.session_state.response_context = ""    
+    
+    if is_qa.strip().lower()=='writing':
+        resp = st.session_state.rephrase_chain.invoke(input_dict)
+        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+        print("**********Rephrased input :", resp_string)
+        result = st.session_state.email_chain.invoke({'input':resp_string})
+        anno_result = result['answer']
+        st.session_state.response = result
+        st.session_state.response_context = ""  
+
+    if is_qa.strip().lower()=='db_assistant':
+
+        #do stuff
+        resp = st.session_state.pandas_query_chain.invoke(input_dict)
+        db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
+        tab_data = eval(db_query)
+        result = st.session_state.tabular_data_summarizer_chain({'table_data': tab_data})
+        st.session_state.response = parse_response(result)
+        st.session_state.response_context = ""  
+ 
+    
+    #save the query in the chat history
+    st.session_state.messages.append({"speaker" : "user", "content": query_text})
+    
+    # rel_sources = [doc.metadata['source'] for doc in docs]
+    # rel_pages = [doc.metadata['page'] for doc in docs]
+    # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
+    st.session_state.messages.append({"speaker" : "AI",
+                                    "content": anno_result})
+
+
+    
 def build_doc_assistant_tab():
-    if 'messages' not in st.session_state.keys():
-        st.session_state.messages = []
-    st.session_state.source_docs = st.file_uploader(label="Upload Documents", 
-                                                    type="pdf", 
-                                                    accept_multiple_files=True)
-    st.button("Submit documents", on_click=process_documents)
-    k_list = [3,4,5,6,7]
-    st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
-    st.session_state.func = st.selectbox('Select Database', ['Public', 'Private'], index=0)
-    st.session_state.vector_db = load_vector_db(st.session_state.vector_db_paths[st.session_state.func])
 
-    with st.popover("Show files"):
-        metadatas = st.session_state.vector_db.get()['metadatas']
-        all_files = list(set([entry['source'] for entry in metadatas]))
-        mark_down_text = ''
-        for f in all_files:
-            mark_down_text+= '- '+f+'\n'
-        print(mark_down_text)
-        st.markdown(mark_down_text)
+    with st.container(height=500):
+        upload_doc_col, search_db_col = st.columns(2)
+        with upload_doc_col:
+            if 'messages' not in st.session_state.keys():
+                st.session_state.messages = []
+            
+            st.session_state.source_docs = st.file_uploader(label="Upload Documents", 
+                                                            type="pdf", 
+                                                            accept_multiple_files=True)
+            st.button("Submit documents", on_click=process_documents)
+            k_list = [3,4,5,6,7]
+            st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
+            st.session_state.func = st.selectbox('Select Database', ['Public', 'Private'], index=0)
+            st.session_state.vector_db = load_vector_db(st.session_state.vector_db_paths[st.session_state.func])
 
-    uploaded_file = st.session_state.source_docs
+            with st.popover("Show files"):
+                metadatas = st.session_state.vector_db.get()['metadatas']
+                all_files = list(set([entry['source'] for entry in metadatas]))
+                mark_down_text = ''
+                for f in all_files:
+                    mark_down_text+= '- '+f+'\n'
+                print(mark_down_text)
+                st.markdown(mark_down_text)
+
+            uploaded_file = st.session_state.source_docs
+        with search_db_col:
+            st.write('Set filters')
+            col1, col2 = st.columns(2)
+            with col1:
+                p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
+                s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+                e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+            with col2:
+                inc_energy = st.checkbox('Energy anomaly', value=False)
+                inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
+                inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
+
+            #build the query
+            query = f'(st.session_state.cumm_data_df["name"]=="{p_name}") & \
+                        (st.session_state.cumm_data_df["timestamp"]>={s_ts}) & \
+                            (st.session_state.cumm_data_df["timestamp"]<={e_ts})'
+            if inc_energy:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
+            if inc_flowrate:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
+            if inc_reservoir:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
+            
+            final_query = f'st.session_state.cumm_data_df[{query}]'
+            print("FINAL QUERY : ", final_query)
+            if st.button('Get data'):
+
+                st.dataframe(eval(final_query))
 
     st.chat_input(placeholder = 'Enter query here ...', 
                         on_submit=query_chain,
@@ -618,11 +795,11 @@ def main():
                                         mid_range=gray_range,
                                         threshold=threshold)
 
+                build_anomaly_timeline(plant_name)
 
-
-            # with doc_assist_tab:
+            with doc_assist_tab:
                 
-            #     build_doc_assistant_tab()
+                build_doc_assistant_tab()
         time.sleep(4)
     elif authentication_status == False:
         st.error('Username/password is incorrect')
