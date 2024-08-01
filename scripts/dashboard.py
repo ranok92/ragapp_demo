@@ -47,7 +47,8 @@ def build_llm_infrastructure():
     '''
 
     st.session_state.llm = 'llama3.1'
-
+    setup_llms()
+    setup_llm_chains()
 
 
 # ---- FUNCTIONS FOR GRID OVERVIEW TAB ------
@@ -56,7 +57,6 @@ def build_llm_infrastructure():
  
 def draw_realtime_map():
 
-    st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
     m = folium.Map(location=[st.session_state.cur_data_df['latitude'].mean(), st.session_state.cur_data_df['longitude'].mean()], zoom_start=10)
     source_anomaly= 'http://localhost:8000/anomalous.geojson'
     container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
@@ -76,7 +76,7 @@ def draw_realtime_map():
         interval=2000
     )
     realtime_layer_anomaly.add_to(m)
-    st_folium(m, height=600, use_container_width=True)
+    st_folium(m, height=500, use_container_width=True)
 
 # ----- Plot historic line chart for a given KPI -----
 
@@ -491,14 +491,17 @@ def query_chain():
         st.session_state.response = result
         st.session_state.response_context = ""  
 
-    if is_qa.strip().lower()=='db_assistant':
+    if is_qa.strip().lower()=='power':
 
         #do stuff
         resp = st.session_state.pandas_query_chain.invoke(input_dict)
         db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
+        print("PANDA Query : ", db_query)
         tab_data = eval(db_query)
         result = st.session_state.tabular_data_summarizer_chain({'table_data': tab_data})
-        st.session_state.response = parse_response(result)
+        print("REsponse from TABLE :", result)
+        anno_result = parse_response(result)
+        #st.session_state.response = parse_response(result)
         st.session_state.response_context = ""  
  
     
@@ -510,6 +513,26 @@ def query_chain():
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
     st.session_state.messages.append({"speaker" : "AI",
                                     "content": anno_result})
+
+
+def build_chat_window():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    st.chat_input(placeholder = 'Enter query here ...', 
+                on_submit=query_chain,
+                key='current_input')
+    chat_row = st.empty()
+    #context_row = st.empty()
+    with chat_row.container(height=450, border=True):
+        #display the chat history so far
+        for msg in st.session_state.messages:
+            st.chat_message(msg['speaker']).markdown(msg['content'])
+
+        #display the documents in the context used to come up with the answer
+    # with context_row.container(height=200, border=True):
+    #     if 'response_context' in st.session_state.keys():
+    #         for doc in st.session_state.response_context:
+    #             st.write(doc)
 
 
     
@@ -542,52 +565,38 @@ def build_doc_assistant_tab():
             uploaded_file = st.session_state.source_docs
         with search_db_col:
             st.write('Set filters')
-            col1, col2 = st.columns(2)
-            with col1:
-                p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
-                s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-                e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-            with col2:
-                inc_energy = st.checkbox('Energy anomaly', value=False)
-                inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
-                inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
+            with st.form("Set filters"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.session_state.db_filter_p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
+                    st.session_state.db_filter_s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+                    st.session_state.db_filter_e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+                with col2:
+                    st.session_state.db_filter_inc_energy = st.checkbox('Energy anomaly', value=False)
+                    st.session_state.db_filter_inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
+                    st.session_state.db_filter_inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
 
-            #build the query
-            query = f'(st.session_state.cumm_data_df["name"]=="{p_name}") & \
-                        (st.session_state.cumm_data_df["timestamp"]>={s_ts}) & \
-                            (st.session_state.cumm_data_df["timestamp"]<={e_ts})'
-            if inc_energy:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
-            if inc_flowrate:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
-            if inc_reservoir:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
-            
-            final_query = f'st.session_state.cumm_data_df[{query}]'
-            print("FINAL QUERY : ", final_query)
-            if st.button('Get data'):
+                retrieve_data = st.form_submit_button("Fetch data")
+                if retrieve_data:
+                    #build the query
+                    query = f'(st.session_state.cumm_data_df["name"]=="{st.session_state.db_filter_p_name}") & \
+                                (st.session_state.cumm_data_df["timestamp"]>={st.session_state.db_filter_s_ts}) & \
+                                    (st.session_state.cumm_data_df["timestamp"]<={st.session_state.db_filter_e_ts})'
+                    if st.session_state.db_filter_inc_energy:
+                        query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
+                    if st.session_state.db_filter_inc_flowrate:
+                        query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
+                    if st.session_state.db_filter_inc_reservoir:
+                        query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
+                    
+                    final_query = f'st.session_state.cumm_data_df[{query}]'
+                    print("FINAL QUERY : ", final_query)
+                    st.dataframe(eval(final_query))
 
-                st.dataframe(eval(final_query))
-
-    st.chat_input(placeholder = 'Enter query here ...', 
-                        on_submit=query_chain,
-                        key='current_input')
-    chat_row = st.empty()
-    context_row = st.empty()
-    with chat_row.container(height=500, border=True):
-        #display the chat history so far
-        for msg in st.session_state.messages:
-            st.chat_message(msg['speaker']).markdown(msg['content'])
-
-        #display the documents in the context used to come up with the answer
-    with context_row.container(height=200, border=True):
-        if 'response_context' in st.session_state.keys():
-            for doc in st.session_state.response_context:
-                st.write(doc)
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data() -> pd.DataFrame:
-    st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url)
+    st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url, index_col=[0])
 
     t = st.session_state.cur_data_df['timestamp'].iloc[0]
 
@@ -599,7 +608,7 @@ def get_data() -> pd.DataFrame:
         if 'cumm_data_df' not in st.session_state.keys():
             st.session_state.cumm_data_df = st.session_state.cur_data_df
         else:
-            st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df])
+            st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df], ignore_index=True)
 
     print("UNIQUE TIMESTAMPS :", st.session_state.cumm_data_df['timestamp'].unique())
 
@@ -675,8 +684,19 @@ def main():
 
             with grid_overview_tab:
                 #create the map container
-                with st.container(height=600):
-                    draw_realtime_map()
+                st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
+
+                with st.container(height=635):
+                    map_col, chat_col = st.columns([0.7, 0.3])
+
+                    with map_col:
+                        st.markdown("<h2 style='text-align: center; color: black;'> Interactive map </h2>", unsafe_allow_html=True)
+
+                        draw_realtime_map()
+                    with chat_col:
+                        st.markdown("<h2 style='text-align: center; color: black;'> Assistant </h2>", unsafe_allow_html=True)
+                        build_chat_window()
+
 
                 col1, col2 = st.columns(2)
 
@@ -795,7 +815,7 @@ def main():
                                         mid_range=gray_range,
                                         threshold=threshold)
 
-                build_anomaly_timeline(plant_name)
+                #build_anomaly_timeline(plant_name)
 
             with doc_assist_tab:
                 
