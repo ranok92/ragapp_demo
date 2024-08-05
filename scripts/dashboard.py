@@ -8,7 +8,7 @@ import pandas as pd  # read csv, df manipulation
 import streamlit as st  # 🎈 data web app development
 from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
-from streamlit_timeline import timeline
+from streamlit_timeline import st_timeline
 
 import altair as alt
 import folium
@@ -77,6 +77,34 @@ def draw_realtime_map():
     )
     realtime_layer_anomaly.add_to(m)
     st_folium(m, height=500, use_container_width=True)
+
+# ----- Plot line chart for different anomalies across time
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def plot_anomaly_linechart():
+    #aggregate the anomalies by datetime
+    st.markdown("<h2 style='text-align: center; color: blue;'> Anomalies registered over time </h2>", unsafe_allow_html=True)
+
+    part_data_df = st.session_state.cumm_data_df
+ 
+    part_data = part_data_df.groupby('datetime').agg({ 
+                                                  'anomaly_reservoir_level':sum,
+                                                  'anomaly_water_flow_rate':sum,
+                                                  'anomaly_total_energy_output':sum,
+                                                  'anomaly_co2_emissions': sum})
+    
+    part_data.rename(columns={'anomaly_reservoir_level': 'Reservoir level',
+                      'anomaly_water_flow_rate': 'Water flow rate',
+                      'anomaly_total_energy_output': 'Total energy output',
+                      'anomaly_co2_emissions' : 'CO2 emissions'}, inplace=True)
+    part_data_df_long = part_data.melt(ignore_index=False, var_name='Anomaly Type')
+    part_data_long_w_index = part_data_df_long.reset_index()
+    ano_chart = alt.Chart(part_data_long_w_index).mark_area(opacity=0.5).encode(
+            x='datetime:T',
+            y='value:Q',
+            color='Anomaly Type'
+    )
+    st.altair_chart(ano_chart, use_container_width=True)
+
 
 # ----- Plot historic line chart for a given KPI -----
 
@@ -303,9 +331,16 @@ def build_indiv_plant_kpi_card(plant_name, kpi_name,
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def build_anomaly_timeline(plant_name):
     plant_data = st.session_state.cumm_data_df[st.session_state.cumm_data_df['name']==plant_name]
-    plant_data.rename(columns={'datetime':'start_date'})
-    print(plant_data)
-    timeline(plant_data.to_json())
+    plant_data.insert(0, 'ID', range(0, len(plant_data)))
+    plant_data_json  = plant_data.to_json()
+    plant_data_dict = json.loads(plant_data_json)
+
+    timeline_items = [{'id': plant_data_dict['ID'], 
+                       'content': plant_data_dict['name'], 
+                       'start': plant_data_dict['datetime'] }]
+    print("TIMELINE ITEMS", timeline_items)
+    st_timeline(timeline_items)
+
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def build_indiv_plant_tab():
@@ -726,8 +761,8 @@ def main():
                     fig_col1, fig_col2 = st.columns(2)
                     with fig_col1:
                         #line chart over dayc
-                        plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
-
+                        #plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
+                        plot_anomaly_linechart()
                     with fig_col2:
                         #barchart with instantaneous readings
                         plot_instantaneous_barchart(bar_chart_kpi)
