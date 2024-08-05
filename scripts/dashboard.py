@@ -532,8 +532,18 @@ def query_chain():
         resp = st.session_state.pandas_query_chain.invoke(input_dict)
         db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
         print("PANDA Query : ", db_query)
-        tab_data = eval(db_query)
-        result = st.session_state.tabular_data_summarizer_chain({'table_data': tab_data})
+        table_data = eval(db_query)
+
+        #remove columns that are not necessary
+        total_cols = table_data.columns
+        cols_to_keep = ['name','timestamp']
+        for col in total_cols:
+            if 'anomaly_' in col:
+                cols_to_keep.append(col)
+        table_data = table_data[cols_to_keep]
+        print("The retrieved TABLE :", table_data)
+
+        result = st.session_state.tabular_data_summarizer_chain({'table_data': table_data})
         print("REsponse from TABLE :", result)
         anno_result = parse_response(result)
         #st.session_state.response = parse_response(result)
