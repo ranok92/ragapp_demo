@@ -22,7 +22,7 @@ import plotly.graph_objects as go
 
 import yaml
 from yaml.loader import SafeLoader
-
+import statistics
 #--- llm imports 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.llms import Ollama
@@ -464,22 +464,28 @@ def setup_llm_chains():
                                 )
 
 
-def query_chain():
+def query_chain_anomaly_assistant():
     #run the email chain
 
     query_text = st.session_state.current_input
-    update_vector_db()
 
     k = st.session_state.search_k if st.session_state.search_k else 3  
-    retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
+    retriever = st.session_state.anomaly_soln_vector_db.as_retriever(search_kwargs={"k": k})
 
     #use chains
 
     #check if retrieval is required
-    resp = st.session_state.router_chain.invoke({'input': query_text})
-    print("***RESPONSE QA : ", resp['answer'])
-    is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
+    router_samples = 3
+    router_resp_list = []
+    for i in range(router_samples):
+
+        router_resp = st.session_state.router_chain.invoke({'input': query_text})
+        print("***RESPONSE QA : ", router_resp['answer'])
+
+        router_resp_list.append(get_key_val_from_llm_json_string(router_resp['answer'], 'response'))
     
+    is_qa = statistics.median(router_resp_list)
+    print("***  ROUTER RESPONSE : ", router_resp_list)
     input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
     
     if is_qa.strip().lower()=='qa':
@@ -564,7 +570,7 @@ def build_chat_window():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     st.chat_input(placeholder = 'Enter query here ...', 
-                on_submit=query_chain,
+                on_submit=query_chain_anomaly_assistant,
                 key='current_input')
     chat_row = st.empty()
     #context_row = st.empty()
@@ -682,10 +688,17 @@ def main():
 
     #--- TODO : Change the way the VECTOR_DB_PATHS  work in dashboard.py and ragapp.py ---
 
+    #vector DBs for work efficiency improvement
     st.session_state.vector_db_paths = {
                     'Public' : Path('../vectorstores/energy_public'), 
                     'Private' : Path('../vectorstores/energy_private'),
                         }
+    
+    #loading db for anomaly solution assistant 
+
+    anomaly_soln_vector_db_path = Path('../vectorstores/powerplant_anomaly_solutions')
+    st.session_state.anomaly_soln_vector_db = load_vector_db(anomaly_soln_vector_db_path)
+    
     # read csv from a URL
 
     get_data()
@@ -743,26 +756,26 @@ def main():
                         build_chat_window()
 
 
-                col1, col2 = st.columns(2)
+                # col1, col2 = st.columns(2)
 
-                with col1:
-                    historic_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='line_chart')
-                with col2:
-                    bar_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='bar_chart')
+                # with col1:
+                #     historic_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='line_chart')
+                # with col2:
+                #     bar_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='bar_chart')
 
                 #calculate daily averages of different KPIS
-                df_grouped = st.session_state.full_data_df.groupby(['timestamp']).agg({historic_chart_kpi:['mean']})
-                kpi_week_data = np.array(df_grouped[historic_chart_kpi]['mean']).reshape((-1 ,24))
-                kpi_week_min = kpi_week_data.min(axis=0)
-                kpi_week_max = kpi_week_data.max(axis=0)
+                # df_grouped = st.session_state.full_data_df.groupby(['timestamp']).agg({historic_chart_kpi:['mean']})
+                # kpi_week_data = np.array(df_grouped[historic_chart_kpi]['mean']).reshape((-1 ,24))
+                # kpi_week_min = kpi_week_data.min(axis=0)
+                # kpi_week_max = kpi_week_data.max(axis=0)
 
-                df_historic_weekly_minmax = pd.DataFrame()
-                df_historic_weekly_minmax[f'{historic_chart_kpi}_min'] = kpi_week_min 
-                df_historic_weekly_minmax[f'{historic_chart_kpi}_max'] = kpi_week_max 
-                df_historic_weekly_minmax['timestamp'] = np.arange(24)
+                # df_historic_weekly_minmax = pd.DataFrame()
+                # df_historic_weekly_minmax[f'{historic_chart_kpi}_min'] = kpi_week_min 
+                # df_historic_weekly_minmax[f'{historic_chart_kpi}_max'] = kpi_week_max 
+                # df_historic_weekly_minmax['timestamp'] = np.arange(24)
 
                 grid_overview_row1 = st.empty()
-                grid_overview_row2 = st.empty()
+                #grid_overview_row2 = st.empty()
 
                 # creating a single-element container
                 with grid_overview_row1.container(height=500):
@@ -775,19 +788,19 @@ def main():
                         plot_anomaly_linechart()
                     with fig_col2:
                         #barchart with instantaneous readings
-                        plot_instantaneous_barchart(bar_chart_kpi)
-
-
-                with grid_overview_row2.container(height=250, border=True):
-                    
-                    anomaly_col, summary_col = st.columns(2, gap='small')
-
-                    with anomaly_col:
                         write_anomalies()
+
+
+                # with grid_overview_row2.container(height=250, border=True):
+                    
+                #     anomaly_col, summary_col = st.columns(2, gap='small')
+
+                #     with anomaly_col:
+                #         write_anomalies()
                         
-                    with summary_col.container(height = 220, border=True):
-                        #write_llm_summarization()
-                        pass
+                #     with summary_col.container(height = 220, border=True):
+                #         #write_llm_summarization()
+                #         pass
 
             with indiv_plant_tab:
 
