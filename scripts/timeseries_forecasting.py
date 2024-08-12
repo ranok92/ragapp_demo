@@ -93,7 +93,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     #current data
     kpi_data.extend([float("NaN")]*(timesteps-t))
-    power_pred_df[f'{pred_linechart_kpi}'] = kpi_data
+    power_pred_df[f'{pred_linechart_kpi}'] = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])
     #pred mean
     pred_mean_nan = [float("NaN")]*t
     pred_mean_future = plant_power_data_predict_mean[t:]
@@ -104,11 +104,16 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
     pred_std_future = plant_power_data_predict_std[t:]
     pred_std_nan.extend(pred_std_future)
 
+    #add noise to mean to emulate different perdictions 
+    pred_mean_nan_noisy = pred_mean_nan+ np.random.uniform(low=np.zeros(len(pred_mean_nan)), 
+                                                                high=np.array(pred_mean_nan)/5)
     #add cols to df
-    power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan+np.random.rand(168)*30
+    power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan_noisy
+    #+np.random.rand(168)*2
     #power_pred_df[f'']
 
     multiplier = power_pred_df[f'{pred_linechart_kpi}_pred_mean'].mean()/5
+    #multiplier = 1
     power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(168)*multiplier+multiplier/5
     power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(168)*multiplier-multiplier/5
     power_pred_df['mean_label'] = (timesteps+1)*['mean']
@@ -126,6 +131,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
                                                                                                     )
                                                                                             )
                                                                                 )
+    
     kpi_lines.encoding.x.scale = alt.Scale(domain=[0, 168])
                            
 
@@ -153,16 +159,16 @@ def show_error_metrics(pred_df, kpi):
     actual_val = pred_df[kpi]
     pred_val = pred_df[f'{kpi}_pred_mean']
     n = len(pred_df)
-    print(n)
-    mse = np.sum(np.square(actual_val - pred_val))/n
+    print(pred_val)
+    rmse = np.sqrt(np.sum(np.square(actual_val - pred_val))/n)
     mape = (np.sum(np.abs(np.divide((actual_val-pred_val), actual_val)))/n)*100 
     metrics_col1, metrics_col2 = st.columns(2)
     with metrics_col1:
         st.markdown(f'<h2> MAPE </h2>', unsafe_allow_html=True)
         st.markdown(f'<h3 style="text-align:center"> {mape:.3f}</h3>', unsafe_allow_html=True)
     with metrics_col2:
-        st.markdown(f'<h2> MSE </h2>', unsafe_allow_html=True)
-        st.markdown(f'<h3 style="text-align:center"> {mse:.3f}</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h2> RMSE </h2>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="text-align:center"> {rmse:.3f}</h3>', unsafe_allow_html=True)
 
 def main():
     st.set_page_config(
