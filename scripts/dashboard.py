@@ -37,6 +37,7 @@ from scripts.ragapp import  check_sentence_hallucination, \
                             process_documents, load_documents, \
                             split_documents, load_vector_db, \
                             update_vector_db
+from st_aggrid import AgGrid
 
 
 REFRESH_TIMER = 2
@@ -61,9 +62,10 @@ def draw_realtime_map():
     source_anomaly= 'http://localhost:8000/anomalous.geojson'
     container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
     pt_layer_func = JsCode('''(f, latlng) => { 
-                                var rad = f.properties.units*2
-                                var popup_msg = 'Plant Name ' + f.properties.name + "<br>" + 'Plant Capacity :' + f.properties.units
-                                return L.circleMarker(latlng, {radius: rad, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg); }
+                                var rad = f.properties.people_affected/20
+                                var popup_options = {className:'popupclass'}
+                                var popup_msg = 'Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected
+                                return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg, popup_options); }
                            
                            ''')
     realtime_layer_anomaly = Realtime(
@@ -82,7 +84,7 @@ def draw_realtime_map():
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_anomaly_linechart():
     #aggregate the anomalies by datetime
-    st.markdown("<h2 style='text-align: center; color: blue;'> Anomalies registered over time </h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
 
     part_data_df = st.session_state.cumm_data_df
  
@@ -144,28 +146,36 @@ def plot_instantaneous_barchart(bar_chart_kpi):
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def write_anomalies():
     t = st.session_state.timestamps[-1]
-    st.markdown("<h2 style='text-align: center; color: blue;'> Anomalies registered </h2>", unsafe_allow_html=True)
-    ano_col1, ano_col2, ano_col3, ano_col4 = st.columns(4)
-    with ano_col1:
-        st.html(f'<span class="anomaly_cards"></span>')
-        power_ano = sum(st.session_state.cumm_data_df['anomaly_total_energy_output'])
-        st.markdown("<h5 style='text-align: center; color: black;'>Power output</h5>", unsafe_allow_html=True)
-        st.write(f"<h6 style='text-align: center; color: red;'> {power_ano} </h6>", unsafe_allow_html=True)
-    with ano_col2:
-        st.html(f'<span class="anomaly_cards"></span>')
-        reserv_ano = sum(st.session_state.cumm_data_df['anomaly_reservoir_level'])
-        st.markdown("<h5 style='text-align: center; color: black;'>Reservoir level</h5>", unsafe_allow_html=True)
-        st.write(f"<h6 style='text-align: center; color: red;'> {reserv_ano} </h6>", unsafe_allow_html=True)
-    with ano_col3:
-        st.html(f'<span class="anomaly_cards"></span>')
-        co2_ano = sum(st.session_state.cumm_data_df['anomaly_co2_emissions'])
-        st.markdown("<h5 style='text-align: center; color: black;'>C02 level</h5>", unsafe_allow_html=True)
-        st.write(f"<h6 style='text-align: center; color: red;'> {co2_ano} </h6>", unsafe_allow_html=True)
-    with ano_col4:
-        st.html(f'<span class="anomaly_cards"></span>')
-        flow_ano = sum(st.session_state.cumm_data_df['anomaly_water_flow_rate'])
-        st.markdown("<h5 style='text-align: center; color: black;'>Water flow rate</h5>", unsafe_allow_html=True)
-        st.write(f"<h6 style='text-align: center; color: red;'> {flow_ano} </h6>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030; padding: 2rem 0px'> Cummulative Anomaly Count </h2>", unsafe_allow_html=True)
+    row1 = st.container()
+    row2 = st.container()
+    with row1:
+        ano_col1, ano_col2  = st.columns(2)
+        with ano_col1:
+            st.html(f'<span class="anomaly_counter"></span>')
+            power_ano = sum(st.session_state.cumm_data_df['anomaly_total_energy_output'])
+            st.markdown("<h5 style='text-align: center; color: black;'>Power output</h5>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center; color: red;'> {power_ano} </h6>", unsafe_allow_html=True)
+        with ano_col2:
+            st.html(f'<span class="anomaly_counter"></span>')
+            reserv_ano = sum(st.session_state.cumm_data_df['anomaly_reservoir_level'])
+            st.markdown("<h5 style='text-align: center; color: black;'>Reservoir level</h5>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center; color: red;'> {reserv_ano} </h6>", unsafe_allow_html=True)
+    with row2:
+
+        ano_col3, ano_col4 = st.columns(2)
+        with ano_col3:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            co2_ano = sum(st.session_state.cumm_data_df['anomaly_co2_emissions'])
+            st.markdown("<h5 style='text-align: center; color: black;'>C02 level</h5>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center; color: red;'> {co2_ano} </h6>", unsafe_allow_html=True)
+        with ano_col4:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            flow_ano = sum(st.session_state.cumm_data_df['anomaly_water_flow_rate'])
+            st.markdown("<h5 style='text-align: center; color: black;'>Water flow rate</h5>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center; color: red;'> {flow_ano} </h6>", unsafe_allow_html=True)
 
 # --- Writing the llm summarization of current data ---- 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
@@ -306,8 +316,7 @@ def build_indiv_plant_kpi_card(plant_name, kpi_name,
                     low_range=low_range, 
                     mid_range=mid_range, 
                     threshold=threshold)
-    st.write("Past 24 hr")
-
+    st.write("<h3> Past 24 Hrs</h3", unsafe_allow_html=True)
     daily_stat_min, daily_stat_max = st.columns(2)
     with daily_stat_min:
         st.write(f"Min\n{kpi_min}")
@@ -467,7 +476,7 @@ def setup_llm_chains():
 def query_chain_anomaly_assistant():
     #run the email chain
 
-    query_text = st.session_state.current_input
+    query_text = st.session_state.current_input_anomaly
 
     k = st.session_state.search_k if st.session_state.search_k else 3  
     retriever = st.session_state.anomaly_soln_vector_db.as_retriever(search_kwargs={"k": k})
@@ -566,12 +575,12 @@ def query_chain_anomaly_assistant():
                                     "content": anno_result})
 
 
-def build_chat_window():
+def build_chat_window_anomaly():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     st.chat_input(placeholder = 'Enter query here ...', 
                 on_submit=query_chain_anomaly_assistant,
-                key='current_input')
+                key='current_input_anomaly')
     chat_row = st.empty()
     #context_row = st.empty()
     with chat_row.container(height=450, border=True):
@@ -586,6 +595,57 @@ def build_chat_window():
     #             st.write(doc)
 
 
+
+def build_chat_window_assistant():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    st.chat_input(placeholder = 'Enter query here ...', 
+                on_submit=query_chain,
+                key='current_input')
+    chat_row_assistant = st.empty()
+    #context_row = st.empty()
+    with chat_row_assistant.container(height=450, border=True):
+        #display the chat history so far
+        for msg in st.session_state.messages:
+            st.chat_message(msg['speaker']).markdown(msg['content'])
+
+        #display the documents in the context used to come up with the answer
+    # with context_row.container(height=200, border=True):
+    #     if 'response_context' in st.session_state.keys():
+    #         for doc in st.session_state.response_context:
+    #             st.write(doc)
+
+
+
+def build_data_filter_window():
+    st.write('Set filters')
+    with st.form("Set filters"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.db_filter_p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
+            st.session_state.db_filter_s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+            st.session_state.db_filter_e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
+        with col2:
+            st.session_state.db_filter_inc_energy = st.checkbox('Energy anomaly', value=False)
+            st.session_state.db_filter_inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
+            st.session_state.db_filter_inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
+
+        retrieve_data = st.form_submit_button("Fetch data")
+        if retrieve_data:
+            #build the query
+            query = f'(st.session_state.cumm_data_df["name"]=="{st.session_state.db_filter_p_name}") & \
+                        (st.session_state.cumm_data_df["timestamp"]>={st.session_state.db_filter_s_ts}) & \
+                            (st.session_state.cumm_data_df["timestamp"]<={st.session_state.db_filter_e_ts})'
+            if st.session_state.db_filter_inc_energy:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
+            if st.session_state.db_filter_inc_flowrate:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
+            if st.session_state.db_filter_inc_reservoir:
+                query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
+            
+            final_query = f'st.session_state.cumm_data_df[{query}]'
+            print("FINAL QUERY : ", final_query)
+            AgGrid(eval(final_query))
     
 def build_doc_assistant_tab():
 
@@ -615,35 +675,7 @@ def build_doc_assistant_tab():
 
             uploaded_file = st.session_state.source_docs
         with search_db_col:
-            st.write('Set filters')
-            with st.form("Set filters"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.session_state.db_filter_p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
-                    st.session_state.db_filter_s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-                    st.session_state.db_filter_e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-                with col2:
-                    st.session_state.db_filter_inc_energy = st.checkbox('Energy anomaly', value=False)
-                    st.session_state.db_filter_inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
-                    st.session_state.db_filter_inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
-
-                retrieve_data = st.form_submit_button("Fetch data")
-                if retrieve_data:
-                    #build the query
-                    query = f'(st.session_state.cumm_data_df["name"]=="{st.session_state.db_filter_p_name}") & \
-                                (st.session_state.cumm_data_df["timestamp"]>={st.session_state.db_filter_s_ts}) & \
-                                    (st.session_state.cumm_data_df["timestamp"]<={st.session_state.db_filter_e_ts})'
-                    if st.session_state.db_filter_inc_energy:
-                        query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
-                    if st.session_state.db_filter_inc_flowrate:
-                        query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
-                    if st.session_state.db_filter_inc_reservoir:
-                        query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
-                    
-                    final_query = f'st.session_state.cumm_data_df[{query}]'
-                    print("FINAL QUERY : ", final_query)
-                    st.dataframe(eval(final_query))
-
+            build_chat_window_assistant()
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data() -> pd.DataFrame:
@@ -707,7 +739,7 @@ def main():
 
     build_llm_infrastructure()
 
-    st.title("EnergyGPT: Monitoring and assistance")
+    st.title("EnergyGPT: Monitoring & Assistance")
 
 
     if 'count' not in st.session_state:
@@ -742,18 +774,18 @@ def main():
 
             with grid_overview_tab:
                 #create the map container
-                st.markdown("<h2 style='text-align: center; color: black;'> Anomaly detection </h2>", unsafe_allow_html=True)
+                st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomaly Detection Dashbaord</h2>", unsafe_allow_html=True)
 
                 with st.container(height=635):
                     map_col, chat_col = st.columns([0.7, 0.3])
 
                     with map_col:
-                        st.markdown("<h2 style='text-align: center; color: black;'> Interactive map </h2>", unsafe_allow_html=True)
+                        st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Interactive Map </h2>", unsafe_allow_html=True)
 
                         draw_realtime_map()
                     with chat_col:
-                        st.markdown("<h2 style='text-align: center; color: black;'> Assistant </h2>", unsafe_allow_html=True)
-                        build_chat_window()
+                        st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Assistant </h2>", unsafe_allow_html=True)
+                        build_chat_window_anomaly()
 
 
                 # col1, col2 = st.columns(2)
@@ -781,7 +813,7 @@ def main():
                 with grid_overview_row1.container(height=500):
 
                     # create two columns for charts
-                    fig_col1, fig_col2 = st.columns(2)
+                    fig_col1, fig_col2 = st.columns([0.7,0.3])
                     with fig_col1:
                         #line chart over dayc
                         #plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
@@ -821,19 +853,18 @@ def main():
                         plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
                         
                 with indiv_plant_row2.container(height=500, border=True):
-                    
+                    st.html(f'<span class="kpi_card"></span>')
+
 
                     indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
                     
                     with indiv_plant_row2_col1.container(border=True):
-                        
                         #gauge chart for reservoir_level
                         #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
                         st.markdown("<h4 style='text-align: center; color: black;'> Reservoir Level </h4>", unsafe_allow_html=True)
                         build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
 
                     with indiv_plant_row2_col2.container(border=True):
-                        
                         #gauge chart for co2 emissions
                         st.markdown("<h4 style='text-align: center; color: black;'> CO2 Emissions </h4>", unsafe_allow_html=True)
 
@@ -846,7 +877,6 @@ def main():
                                         threshold=22)
 
                     with indiv_plant_row2_col3.container(border=True):
-                        
                         st.markdown("<h4 style='text-align: center; color: black;'> Water flow rate </h4>", unsafe_allow_html=True)
 
                         #gauge chart for water_flow_level
