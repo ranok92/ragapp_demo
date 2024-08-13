@@ -82,7 +82,7 @@ def draw_realtime_map():
 
 # ----- Plot line chart for different anomalies across time
 @st.experimental_fragment(run_every=REFRESH_TIMER)
-def plot_anomaly_linechart():
+def plot_powergrid_anomaly_linechart():
     #aggregate the anomalies by datetime
     st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
 
@@ -106,6 +106,27 @@ def plot_anomaly_linechart():
             color='Anomaly Type'
     )
     st.altair_chart(ano_chart, use_container_width=True)
+
+
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def plot_outage_occurance_linechart():
+    #aggregate the anomalies by datetime
+    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
+
+    part_data_df = st.session_state.cumm_data_df
+ 
+    part_data = part_data_df.groupby(['datetime', 'outage_category']).agg(counts=('outage_category', 'count')).reset_index()
+    
+    part_data.rename(columns={'outage_category':'Outage Category'}, inplace=True)
+    part_data_df_long = part_data.melt(ignore_index=False, var_name='Anomaly Type')
+    part_data_long_w_index = part_data_df_long.reset_index()
+    ano_chart = alt.Chart(part_data).mark_area(opacity=0.5).encode(
+            x='datetime:T',
+            y='counts:Q',
+            color='Outage Category:N'
+    )
+    st.altair_chart(ano_chart, use_container_width=True)
+
 
 
 # ----- Plot historic line chart for a given KPI -----
@@ -146,7 +167,7 @@ def plot_instantaneous_barchart(bar_chart_kpi):
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def write_anomalies():
     t = st.session_state.timestamps[-1]
-    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030; padding: 2rem 0px'> Cummulative Anomaly Count </h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030; padding: 2rem 0px'> Anomalies Incurred </h2>", unsafe_allow_html=True)
     row1 = st.container()
     row2 = st.container()
     with row1:
@@ -155,12 +176,12 @@ def write_anomalies():
             st.html(f'<span class="anomaly_counter"></span>')
             power_ano = sum(st.session_state.cumm_data_df['anomaly_total_energy_output'])
             st.markdown("<h5 style='text-align: center; color: black;'>Power output</h5>", unsafe_allow_html=True)
-            st.write(f"<h6 style='text-align: center; color: red;'> {power_ano} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6> {power_ano} </h6>", unsafe_allow_html=True)
         with ano_col2:
             st.html(f'<span class="anomaly_counter"></span>')
             reserv_ano = sum(st.session_state.cumm_data_df['anomaly_reservoir_level'])
             st.markdown("<h5 style='text-align: center; color: black;'>Reservoir level</h5>", unsafe_allow_html=True)
-            st.write(f"<h6 style='text-align: center; color: red;'> {reserv_ano} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6> {reserv_ano} </h6>", unsafe_allow_html=True)
     with row2:
 
         ano_col3, ano_col4 = st.columns(2)
@@ -169,13 +190,13 @@ def write_anomalies():
 
             co2_ano = sum(st.session_state.cumm_data_df['anomaly_co2_emissions'])
             st.markdown("<h5 style='text-align: center; color: black;'>C02 level</h5>", unsafe_allow_html=True)
-            st.write(f"<h6 style='text-align: center; color: red;'> {co2_ano} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6> {co2_ano} </h6>", unsafe_allow_html=True)
         with ano_col4:
             st.html(f'<span class="anomaly_counter"></span>')
 
             flow_ano = sum(st.session_state.cumm_data_df['anomaly_water_flow_rate'])
             st.markdown("<h5 style='text-align: center; color: black;'>Water flow rate</h5>", unsafe_allow_html=True)
-            st.write(f"<h6 style='text-align: center; color: red;'> {flow_ano} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6> {flow_ano} </h6>", unsafe_allow_html=True)
 
 # --- Writing the llm summarization of current data ---- 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
@@ -359,7 +380,7 @@ def build_indiv_plant_tab():
 
     indiv_plant_row1 = st.empty()
     indiv_plant_row2 = st.empty()
-    with indiv_plant_row1.container(height=500, border=True):
+    with indiv_plant_row1.container(height=500):
         indiv_plant_row1_col1, indiv_plant_row1_col2 = st.columns([0.2, 0.8])
 
         with indiv_plant_row1_col1:
@@ -707,15 +728,14 @@ def main():
         page_icon="✅",
         layout="wide",
     )
-    st.html("../styles.html")
-    st.html("<link rel='stylesheet' type='text/css' href='../leaflet.css' />")
-    st.markdown(page_bg_img, unsafe_allow_html=True)
+    st.html("../styles_gpt.html")
+    #st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
 
     #--- EXTERNAL DB INFORMATION  ----
-    st.session_state.dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
-    st.session_state.cur_dataset_url = "../data/dashboard/dashboard_monitoring_data_per_hr.csv"
+    st.session_state.dataset_url = "../data/dashboard/outage_monitoring_data.csv"
+    st.session_state.cur_dataset_url = "../data/dashboard/outage_monitoring_data_per_hr.csv"
     st.session_state.kpi_list = ['total_energy_output', 'reservoir_level', 'water_flow_rate', 'co2_emissions']
 
     #--- TODO : Change the way the VECTOR_DB_PATHS  work in dashboard.py and ragapp.py ---
@@ -768,15 +788,15 @@ def main():
             authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            grid_overview_tab, indiv_plant_tab, doc_assist_tab = st.tabs(['Grid overview', 'Plant overview', 'Assistant'])
+            grid_overview_tab, indiv_plant_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':paperclip: Assistant'])
 
             #---- SET UP THE PAGE STRUCTURE ---
 
             with grid_overview_tab:
                 #create the map container
-                st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomaly Detection Dashbaord</h2>", unsafe_allow_html=True)
+                st.markdown("<h2 style='font-family: serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
 
-                with st.container(height=635):
+                with st.container(height=635, border=False):
                     map_col, chat_col = st.columns([0.7, 0.3])
 
                     with map_col:
@@ -810,18 +830,18 @@ def main():
                 #grid_overview_row2 = st.empty()
 
                 # creating a single-element container
-                with grid_overview_row1.container(height=500):
+                with grid_overview_row1.container(height=500, border=False):
 
                     # create two columns for charts
                     fig_col1, fig_col2 = st.columns([0.7,0.3])
                     with fig_col1:
                         #line chart over dayc
                         #plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
-                        plot_anomaly_linechart()
+                        plot_outage_occurance_linechart()
                     with fig_col2:
                         #barchart with instantaneous readings
-                        write_anomalies()
-
+                        #write_anomalies()
+                        pass
 
                 # with grid_overview_row2.container(height=250, border=True):
                     
@@ -835,73 +855,74 @@ def main():
                 #         pass
 
             with indiv_plant_tab:
+                pass
 
-                pred_linechart_kpi = 'total_energy_output'
-                plant_name = st.selectbox('Select plant' , st.session_state.cur_data_df['name'].unique())
+                # pred_linechart_kpi = 'total_energy_output'
+                # plant_name = st.selectbox('Select plant' , st.session_state.cur_data_df['name'].unique())
 
-                indiv_plant_row1 = st.empty()
-                indiv_plant_row2 = st.empty()
-                with indiv_plant_row1.container(height=500, border=True):
-                    indiv_plant_row1_col1, indiv_plant_row1_col2 = st.columns([0.2, 0.8])
+                # indiv_plant_row1 = st.empty()
+                # indiv_plant_row2 = st.empty()
+                # with indiv_plant_row1.container(height=500, border=True):
+                #     indiv_plant_row1_col1, indiv_plant_row1_col2 = st.columns([0.2, 0.8])
 
-                    with indiv_plant_row1_col1:
+                #     with indiv_plant_row1_col1:
                         
-                        draw_plant_operational_status(plant_name)
+                #         #draw_plant_operational_status(plant_name)
+                #         pass 
+                #     with indiv_plant_row1_col2:
 
-                    with indiv_plant_row1_col2:
-
-                        plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
-                        
-                with indiv_plant_row2.container(height=500, border=True):
-                    st.html(f'<span class="kpi_card"></span>')
+                #         #plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
+                #         pass
+                # with indiv_plant_row2.container(height=500, border=True):
+                #     st.html(f'<span class="kpi_card"></span>')
 
 
-                    indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
+                #     indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
                     
-                    with indiv_plant_row2_col1.container(border=True):
-                        #gauge chart for reservoir_level
-                        #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
-                        st.markdown("<h4 style='text-align: center; color: black;'> Reservoir Level </h4>", unsafe_allow_html=True)
-                        build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
+                #     with indiv_plant_row2_col1.container(border=True):
+                #         #gauge chart for reservoir_level
+                #         #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
+                #         st.markdown("<h4 style='text-align: center; color: black;'> Reservoir Level </h4>", unsafe_allow_html=True)
+                #         build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
 
-                    with indiv_plant_row2_col2.container(border=True):
-                        #gauge chart for co2 emissions
-                        st.markdown("<h4 style='text-align: center; color: black;'> CO2 Emissions </h4>", unsafe_allow_html=True)
+                #     with indiv_plant_row2_col2.container(border=True):
+                #         #gauge chart for co2 emissions
+                #         st.markdown("<h4 style='text-align: center; color: black;'> CO2 Emissions </h4>", unsafe_allow_html=True)
 
-                        build_indiv_plant_kpi_card(plant_name, 
-                                        'co2_emissions', 
-                                        plot_title='CO2 Emissions', 
-                                        full_range=[0, 24],
-                                        low_range=[0, 10],
-                                        mid_range=[10, 20],
-                                        threshold=22)
+                #         build_indiv_plant_kpi_card(plant_name, 
+                #                         'co2_emissions', 
+                #                         plot_title='CO2 Emissions', 
+                #                         full_range=[0, 24],
+                #                         low_range=[0, 10],
+                #                         mid_range=[10, 20],
+                #                         threshold=22)
 
-                    with indiv_plant_row2_col3.container(border=True):
-                        st.markdown("<h4 style='text-align: center; color: black;'> Water flow rate </h4>", unsafe_allow_html=True)
+                #     with indiv_plant_row2_col3.container(border=True):
+                #         st.markdown("<h4 style='text-align: center; color: black;'> Water flow rate </h4>", unsafe_allow_html=True)
 
-                        #gauge chart for water_flow_level
-                        system_cap =  st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name]['capacity (mw)'].iloc[0]
-                        if system_cap < 10:
-                            water_flow_multiplier = 1
+                #         #gauge chart for water_flow_level
+                #         system_cap =  st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name]['capacity (mw)'].iloc[0]
+                #         if system_cap < 10:
+                #             water_flow_multiplier = 1
 
-                        elif system_cap < 100:
-                            water_flow_multiplier = 10
+                #         elif system_cap < 100:
+                #             water_flow_multiplier = 10
 
-                        else:
-                            water_flow_multiplier = 100
+                #         else:
+                #             water_flow_multiplier = 100
 
-                        gauge_range = [0, 70*water_flow_multiplier]
-                        light_gray_range = [0, 20*water_flow_multiplier]
-                        gray_range = [20*water_flow_multiplier, 50*water_flow_multiplier]
-                        threshold = 65*water_flow_multiplier
+                #         gauge_range = [0, 70*water_flow_multiplier]
+                #         light_gray_range = [0, 20*water_flow_multiplier]
+                #         gray_range = [20*water_flow_multiplier, 50*water_flow_multiplier]
+                #         threshold = 65*water_flow_multiplier
 
-                        build_indiv_plant_kpi_card(plant_name, 
-                                        'water_flow_rate', 
-                                        plot_title='Water flow rate', 
-                                        full_range=gauge_range,
-                                        low_range=light_gray_range,
-                                        mid_range=gray_range,
-                                        threshold=threshold)
+                #         build_indiv_plant_kpi_card(plant_name, 
+                #                         'water_flow_rate', 
+                #                         plot_title='Water flow rate', 
+                #                         full_range=gauge_range,
+                #                         low_range=light_gray_range,
+                #                         mid_range=gray_range,
+                #                         threshold=threshold)
 
                 #build_anomaly_timeline(plant_name)
 
