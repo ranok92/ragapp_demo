@@ -84,7 +84,7 @@ def draw_realtime_map():
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_powergrid_anomaly_linechart():
     #aggregate the anomalies by datetime
-    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
 
     part_data_df = st.session_state.cumm_data_df
  
@@ -111,7 +111,7 @@ def plot_powergrid_anomaly_linechart():
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_outage_occurance_linechart():
     #aggregate the anomalies by datetime
-    st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Anomalies Registered Over Time </h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #453030;'> Outages Registered Over Time</h2>", unsafe_allow_html=True)
 
     part_data_df = st.session_state.cumm_data_df
  
@@ -197,6 +197,60 @@ def write_anomalies():
             flow_ano = sum(st.session_state.cumm_data_df['anomaly_water_flow_rate'])
             st.markdown("<h5 style='text-align: center; color: black;'>Water flow rate</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {flow_ano} </h6>", unsafe_allow_html=True)
+
+
+@st.experimental_fragment(run_every=REFRESH_TIMER)
+def write_outages():
+    t = st.session_state.timestamps[-1]
+    st.markdown("<h2 style='text-align: center; color: #453030; padding: 1rem 0px'> Outage Reason </h2>", unsafe_allow_html=True)
+    row1 = st.container()
+    row2 = st.container()
+    row3 = st.container()
+    outage_counts_df = st.session_state.cumm_data_df.groupby('outage_category').agg(outage_counts=('outage_category', 'count')).reset_index()
+    with row1:
+        ano_col1, ano_col2  = st.columns(2)
+        with ano_col1:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            env_factors = outage_counts_df[outage_counts_df['outage_category']=='Environmental Factors']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Env. Factors</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {env_factors} </h6>", unsafe_allow_html=True)
+        with ano_col2:
+            st.html(f'<span class="anomaly_counter"></span>')
+            eqp_fail = outage_counts_df[outage_counts_df['outage_category']=='Equipment Failure']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Equipment Failure</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {eqp_fail} </h6>", unsafe_allow_html=True)
+    with row2:
+
+        ano_col3, ano_col4 = st.columns(2)
+        with ano_col3:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            ext_factors = outage_counts_df[outage_counts_df['outage_category']=='External Factors']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Ext. Factors</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {ext_factors} </h6>", unsafe_allow_html=True)
+        with ano_col4:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            nat_cause = outage_counts_df[outage_counts_df['outage_category']=='Natural Cause']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Nat. Causes</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {nat_cause} </h6>", unsafe_allow_html=True)
+
+    with row3:
+        ano_col5, ano_col6 = st.columns(2)
+        with ano_col5:
+            st.html(f'<span class="anomaly_counter"></span>')
+
+            sys_repair = outage_counts_df[outage_counts_df['outage_category']=='Power System Repair']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Repair</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {sys_repair} </h6>", unsafe_allow_html=True)
+        with ano_col6:
+
+            st.html(f'<span class="anomaly_counter"></span>')
+            sys_improvement = outage_counts_df[outage_counts_df['outage_category']=='System Improvement']['outage_counts'].iloc[0]
+            st.markdown("<h5 style='text-align: center; color: black;'>Improvement</h5>", unsafe_allow_html=True)
+            st.write(f"<h6> {sys_improvement} </h6>", unsafe_allow_html=True)
+
 
 # --- Writing the llm summarization of current data ---- 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
@@ -800,11 +854,11 @@ def main():
                     map_col, chat_col = st.columns([0.7, 0.3])
 
                     with map_col:
-                        st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Interactive Map </h2>", unsafe_allow_html=True)
+                        st.markdown("<h2 style='text-align: center; color: #453030;'> Interactive Map </h2>", unsafe_allow_html=True)
 
                         draw_realtime_map()
                     with chat_col:
-                        st.markdown("<h2 style='font-family: serif; text-align: center; color: #453030;'> Assistant </h2>", unsafe_allow_html=True)
+                        st.markdown("<h2 style='text-align: center; color: #453030;'> Assistant </h2>", unsafe_allow_html=True)
                         build_chat_window_anomaly()
 
 
@@ -840,8 +894,7 @@ def main():
                         plot_outage_occurance_linechart()
                     with fig_col2:
                         #barchart with instantaneous readings
-                        #write_anomalies()
-                        pass
+                        write_outages()
 
                 # with grid_overview_row2.container(height=250, border=True):
                     
