@@ -2,6 +2,7 @@
 import numpy as np  # np mean, np random
 import pandas as pd  # read csv, df manipulation
 import streamlit as st  # 🎈 data web app development
+from streamlit_extras.stylable_container import stylable_container
 from utils.utils import *
 from utils.dashboard_utils import *
 import json
@@ -38,7 +39,7 @@ def query_chain():
 
 
 def build_chat_window_assistant():
-    st.markdown(f'<h3 style="font-family:serif; color:black; text-align:center">Forecasting Assistant</h3>', unsafe_allow_html=True)
+    #st.markdown(f'<h3 style="color:black; text-align:center">Forecasting Assistant</h3>', unsafe_allow_html=True)
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -54,29 +55,28 @@ def build_chat_window_assistant():
 
 
 def build_data_filter_window():
-    st.markdown(f'<h3 style="color:black;font-family:serif;text-align:center">Prediction Param Selection</h2>', unsafe_allow_html=True)
-    param_select_form = st.form('Select params')
+    st.markdown(f'<h3 style="color:black ;text-align:center">Param Selection</h2>', unsafe_allow_html=True)
+    param_select_form = st.form('Select params', border=False)
     with param_select_form:
-        form_col1, form_col2 = st.columns(2)
-        with form_col1:
-            features_selected = st.multiselect("Features to include", 
-                                            ['Feature1', 'Feature2', 'Feature3', 'Feature4'],
-                                            'Feature1')
-            model_selected = st.selectbox("Pick a model", 
-                                        ['Model 1', 'Model 2', 'Model 3'])
-                
-            add_normalization = st.toggle('Add normalization')
-            add_dropout = st.toggle('Add dropout')
-
-        with form_col2:
-            forecasting_horizon = st.selectbox("Pick a prediction horizon", 
-                                                ['1 hr', '1 day', '1 week', '1 month'])
-            
-            training_epochs = st.text_input('Training Epochs', 1000)
-            learning_rate = st.text_input("Learning rate", 0.001)
-            select_optimizer = st.selectbox("Pick an optimizer", 
-                                            ['Opt1', 'Opt2', 'Opt3'])
+        #form_col1, form_col2 = st.columns(2)
         
+        features_selected = st.multiselect("Features to include", 
+                                        ['Feature1', 'Feature2', 'Feature3', 'Feature4'],
+                                        'Feature1')
+        model_selected = st.selectbox("Pick a model", 
+                                    ['Model 1', 'Model 2', 'Model 3'])
+            
+        add_normalization = st.toggle('Add normalization')
+        add_dropout = st.toggle('Add dropout')
+
+        forecasting_horizon = st.selectbox("Pick a prediction horizon", 
+                                            ['1 hr', '1 day', '1 week', '1 month'])
+        
+        training_epochs = st.text_input('Training Epochs', 1000)
+        learning_rate = st.text_input("Learning rate", 0.001)
+        select_optimizer = st.selectbox("Pick an optimizer", 
+                                        ['Opt1', 'Opt2', 'Opt3'])
+    
         retrieve_data = st.form_submit_button("Set Params")
 
 def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
@@ -116,41 +116,69 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
     #multiplier = 1
     power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(168)*multiplier+multiplier/5
     power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(168)*multiplier-multiplier/5
-    power_pred_df['mean_label'] = (timesteps+1)*['mean']
-    power_pred_df['stddev_label'] = (timesteps+1)*['std deviation']
+    power_pred_df['actual_kpi_label'] = (timesteps+1)*['actual value']
+    power_pred_df['mean_label'] = (timesteps+1)*['predicted mean']
+    power_pred_df['stddev_label'] = (timesteps+1)*['predicted std deviation']
 
-    st.markdown("<h2 style='text-align: center; color: black;'> Forecasted Power Generation </h2>", unsafe_allow_html=True)
+
+    # actual_kpi_lines = alt.Chart(power_pred_df, height=600).mark_line().encode(x=alt.X('hours'),
+    #                                                                 y=alt.Y(f'{pred_linechart_kpi}', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
+    #                                                                 color=alt.Color('actual_kpi_label',legend=alt.Legend(
+    #                                                                                             orient='none',
+    #                                                                                             legendX=450, legendY=0,
+    #                                                                                             direction='horizontal',
+    #                                                                                             titleAnchor='middle'
+    #                                                                                             )
+    #                                                                                     )
+    #                                                                         )
+    line_plot_df = power_pred_df[['hours', 
+                                  f'{pred_linechart_kpi}',
+                                    f'{pred_linechart_kpi}_pred_mean']]
+    
+    line_plot_df.rename(columns={f'{pred_linechart_kpi}': 'Actual Value', 
+                                    f'{pred_linechart_kpi}_pred_mean': 'Predicted Value'},
+                                    inplace=True)
+    print(line_plot_df)
+
+    line_plot_df = line_plot_df.melt(id_vars=['hours'],
+                                     value_vars=['Actual Value', 'Predicted Value'],
+                                        var_name='Entity', value_name='m_watts', ignore_index=True)
+    line_plot_df['mean_label'] = (timesteps+1)*(len(line_plot_df))
     #AgGrid(power_pred_df)
-    kpi_lines = alt.Chart(power_pred_df).mark_line().mark_line().encode(x='hours',
-                                                                        y=alt.Y(f'{pred_linechart_kpi}_pred_mean').title("Mega Watts"),
-                                                                        color=alt.Color('mean_label',legend=alt.Legend(
-                                                                                                    orient='none',
-                                                                                                    legendX=490, legendY=0,
-                                                                                                    direction='horizontal',
-                                                                                                    titleAnchor='middle'
-                                                                                                    )
-                                                                                            )
+    kpi_lines = alt.Chart(line_plot_df, height=600).mark_line().encode(x=alt.X('hours'),
+                                                                        y=alt.Y('m_watts', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
+                                                                        strokeDash='Entity',
+                                                                        # color=alt.Color('mean_label',legend=alt.Legend(
+                                                                        #                             orient='none',
+                                                                        #                             legendX=450, legendY=0,
+                                                                        #                             direction='horizontal',
+                                                                        #                             titleAnchor='middle'
+                                                                        #                             )
+                                                                        #                     )
                                                                                 )
     
+    
     kpi_lines.encoding.x.scale = alt.Scale(domain=[0, 168])
-                           
+                       
 
-    pred_band = (alt.Chart(power_pred_df).mark_area(opacity=0.5, color= 'pink').encode(x='hours', 
-                                                        y=alt.Y(f'{pred_linechart_kpi}_pred_upper:Q').title(""),
-                                                        y2=alt.Y2(f'{pred_linechart_kpi}_pred_lower:Q').title(""),
-                                                        color=alt.Color('stddev_label',legend=alt.Legend(
-                                                                                                    title='Legend',
-                                                                                                    orient='none',
-                                                                                                    legendX=490, legendY=0,
-                                                                                                    direction='horizontal',
-                                                                                                    titleAnchor='middle'
-                                                                                                    )
-                                                                                            )
-                                            )
+    pred_band = (alt.Chart(power_pred_df).mark_area(opacity=0.3).encode(x='hours', 
+                                                                        y=alt.Y(f'{pred_linechart_kpi}_pred_upper:Q').title(""),
+                                                                        y2=alt.Y2(f'{pred_linechart_kpi}_pred_lower:Q').title(""),
+                                                                        # color=alt.Color('stddev_label',legend=alt.Legend(
+                                                                        #                                             title='Legend',
+                                                                        #                                             orient='none',
+                                                                        #                                             legendX=650, legendY=-30,
+                                                                        #                                             direction='horizontal',
+                                                                        #                                             titleAnchor='end'
+                                                                        #                                             )
+                                                                        #                                     )
+                                                                                 )
     )
     pred_band.encoding.x.scale = alt.Scale(domain=[0, 168])
+    full_chart = kpi_lines+pred_band
+    full_chart.configure_view(cornerRadius=100)
 
-    st.altair_chart((kpi_lines+pred_band), use_container_width=True)
+    st.altair_chart((full_chart), use_container_width=True)
     return power_pred_df
 
 
@@ -164,11 +192,40 @@ def show_error_metrics(pred_df, kpi):
     mape = (np.sum(np.abs(np.divide((actual_val-pred_val), actual_val)))/n)*100 
     metrics_col1, metrics_col2 = st.columns(2)
     with metrics_col1:
-        st.markdown(f'<h2> MAPE </h2>', unsafe_allow_html=True)
-        st.markdown(f'<h3 style="text-align:center"> {mape:.3f}</h3>', unsafe_allow_html=True)
+        with stylable_container(
+            key='metric1',
+            css_styles='''
+                {
+                    width: 90%;
+                    margin-bottom: 0px;
+                    background: white;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    border-radius: 10px;
+                    padding-bottom: 5px;
+                    text-align:center;
+                }
+                '''
+        ):
+            st.markdown(f'<h4> MAPE </h4>', unsafe_allow_html=True)
+            st.markdown(f'<h3 style="text-align:center"> {mape:.3f}</h3>', unsafe_allow_html=True)
     with metrics_col2:
-        st.markdown(f'<h2> RMSE </h2>', unsafe_allow_html=True)
-        st.markdown(f'<h3 style="text-align:center"> {rmse:.3f}</h3>', unsafe_allow_html=True)
+        with stylable_container(
+            key='metric2',
+            css_styles='''
+                {
+                    width: 90%;
+                    margin-bottom: 0px;
+                    background: white;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    border-radius: 10px;
+                    pdding-bottom: 5px;
+                    text-align:center;
+
+                }
+                '''
+        ):
+            st.markdown(f'<h4> RMSE </h4>', unsafe_allow_html=True)
+            st.markdown(f'<h3 style="text-align:center"> {rmse:.3f}</h3>', unsafe_allow_html=True)
 
 def main():
     st.set_page_config(
@@ -177,7 +234,8 @@ def main():
         layout="wide",
         
     )
-    st.html("../styles.html")
+    st.html("../timeseries_page_styles.html")
+    st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
     st.session_state.llm='llama3'
     setup_llms()
     setup_llm_chains()
@@ -188,30 +246,57 @@ def main():
     st.session_state.dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
     st.session_state.full_data_df = get_data()
     plant_names = st.session_state.full_data_df['name'].unique()
-
-    col1, col2 = st.columns([0.3, 0.7])
+    pred_linechart_kpi = 'total_energy_output'
+    pred_df = None
+    #design the UI
+    with stylable_container(
+        key='page_header',
+        css_styles='''
+        {
+        width: 90%;
+        justify-content: space-around;
+        border-radius: 15px;
+        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+        padding-left:30px;
+        padding-bottom:20px
+        }
+''',
+    ):
+        st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([0.27, 0.63, 0.1])
     with col1:
-        param_form_container = st.container(height=500)
-        chat_container = st.container(height=380)
+        param_form_container = st.container(height=800, border=True)
+        run_eval_container = st.container(height=250, border=True)
+    with col2:
+        pred_stats_container = st.container(height=300, border=False)   
+        
+        pred_plot_container = st.container(height=750, border=True)
+        with pred_plot_container:
+            st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
+    with col3:
+        chat_container = st.container(height=150, border=False)
+        with chat_container:
+            with st.popover(":headphones:", help='Model Consultant'):
+                build_chat_window_assistant()
+        blank_container = st.container(height=900, border=False)
+
+    with col1:
         with param_form_container:
            build_data_filter_window()
-        with chat_container:
-            build_chat_window_assistant()
-    with col2:
-        pred_df = None
-        pred_plot_container = st.container(height=700, border=True)
-        pred_stats_container = st.container(height=180)
-        pred_linechart_kpi = 'total_energy_output'
-        with pred_plot_container:
-            with st.form("Evaluate on "):
-                eval_col1, eval_col2, eval_col3 = st.columns([0.1, 0.3, 0.4])
-                with eval_col2:
-                    plant_name = st.selectbox('Select Plant', plant_names)
-                with eval_col3:
-                    predict_button = st.form_submit_button("Run Predition")
+        with run_eval_container:
+            with st.form("Evaluate on ", border=False):
+                st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
+                plant_name = st.selectbox('Select Plant', plant_names)
+                predict_button = st.form_submit_button("Run Predition")
             if predict_button:
-                pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
-                with pred_stats_container:    
+                with pred_plot_container:
+                    pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
+
+    with col2:
+            with pred_stats_container:
+                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
+
+                if pred_df is not None:
                     show_error_metrics(pred_df, pred_linechart_kpi)
 if __name__=='__main__':
     main()
