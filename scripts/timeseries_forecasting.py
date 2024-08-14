@@ -12,7 +12,7 @@ from prompts.prompt_template import *
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
 
-def get_data():
+def get_data_forecast():
     return pd.read_csv(st.session_state.dataset_url)
 
 
@@ -26,7 +26,7 @@ def setup_llm_chains_forecast():
     pred_assistant_prompt = PromptTemplate(input_variables=['input', 'history'], template=PRED_ASSISTANT_PROMPT_TEMPLATE)
     st.session_state.assistant_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant, prompt=pred_assistant_prompt, output_key='answer')
     
-def query_forecast_chain():
+def query_chain_forecast():
     input_query = st.session_state.current_input
     st.session_state.messages_forecast.append({"speaker" : "user", "content": input_query})
     resp = st.session_state.assistant_chain.invoke({'input':input_query})
@@ -38,13 +38,13 @@ def query_forecast_chain():
 
 
 
-def build_chat_window_assistant():
+def build_chat_window_forecast_assistant():
     #st.markdown(f'<h3 style="color:black; text-align:center">Forecasting Assistant</h3>', unsafe_allow_html=True)
 
     if "messages_forecast" not in st.session_state:
         st.session_state.messages_forecast = []
     st.chat_input(placeholder = 'Enter query here ...', 
-                on_submit=query_forecast_chain,
+                on_submit=query_chain_forecast,
                 key='current_input')
     chat_row_assistant = st.empty()
     #context_row = st.empty()
@@ -233,7 +233,7 @@ def main():
     # read csv from a github repo
     #dataset_url = "../data/dashboard_data.csv"
     st.session_state.dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
-    st.session_state.full_data_df = get_data()
+    st.session_state.full_data_df = get_data_forecast()
     plant_names = st.session_state.full_data_df['name'].unique()
     pred_linechart_kpi = 'total_energy_output'
     pred_df = None
@@ -266,7 +266,7 @@ def main():
         chat_container = st.container(height=150, border=False)
         with chat_container:
             with st.popover(":headphones:", help='Model Consultant'):
-                build_chat_window_assistant()
+                build_chat_window_forecast_assistant()
         blank_container = st.container(height=900, border=False)
 
     with col1:
