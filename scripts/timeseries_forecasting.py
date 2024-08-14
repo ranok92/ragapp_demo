@@ -83,9 +83,9 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     timesteps = 167
     t= 0
-    plant_power_data_predict_mean = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
-    plant_power_data_predict_std = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
-    kpi_data = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
+    plant_power_data_predict_mean = st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
+    plant_power_data_predict_std = st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
+    kpi_data = list(st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
     #kpi_data = []
 
     power_pred_df = pd.DataFrame()
@@ -93,7 +93,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     #current data
     kpi_data.extend([float("NaN")]*(timesteps-t))
-    power_pred_df[f'{pred_linechart_kpi}'] = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])
+    power_pred_df[f'{pred_linechart_kpi}'] = list(st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}'])
     #pred mean
     pred_mean_nan = [float("NaN")]*t
     pred_mean_future = plant_power_data_predict_mean[t:]
@@ -127,12 +127,12 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
     line_plot_df.rename(columns={f'{pred_linechart_kpi}': 'Actual Value', 
                                     f'{pred_linechart_kpi}_pred_mean': 'Predicted Value'},
                                     inplace=True)
-    print(line_plot_df)
 
     line_plot_df = line_plot_df.melt(id_vars=['hours'],
                                      value_vars=['Actual Value', 'Predicted Value'],
                                         var_name='Entity', value_name='m_watts', ignore_index=True)
     line_plot_df['mean_label'] = (timesteps+1)*(len(line_plot_df))
+
     #AgGrid(power_pred_df)
     kpi_lines = alt.Chart(line_plot_df, height=600).mark_line().encode(x=alt.X('hours'),
                                                                         y=alt.Y('m_watts', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
@@ -176,7 +176,6 @@ def show_error_metrics(pred_df, kpi):
     actual_val = pred_df[kpi]
     pred_val = pred_df[f'{kpi}_pred_mean']
     n = len(pred_df)
-    print(pred_val)
     rmse = np.sqrt(np.sum(np.square(actual_val - pred_val))/n)
     mape = (np.sum(np.abs(np.divide((actual_val-pred_val), actual_val)))/n)*100 
     metrics_col1, metrics_col2 = st.columns(2)
@@ -228,13 +227,10 @@ def main():
     st.session_state.llm='llama3'
     setup_llms_forecast()
     setup_llm_chains_forecast()
-    st.session_state.rerun_dashboard = True
-    kpi_list = ['total_energy_output', 'reservoir_level', 'water_flow_rate', 'co2_emissions']
     # read csv from a github repo
-    #dataset_url = "../data/dashboard_data.csv"
-    st.session_state.dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
-    st.session_state.full_data_df = get_data_forecast()
-    plant_names = st.session_state.full_data_df['name'].unique()
+    st.session_state.forecast_dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
+    st.session_state.full_forecast_data_df = get_data_forecast()
+    plant_names = st.session_state.full_forecast_data_df['name'].unique()
     pred_linechart_kpi = 'total_energy_output'
     pred_df = None
     #design the UI
