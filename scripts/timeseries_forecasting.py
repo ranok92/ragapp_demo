@@ -16,24 +16,24 @@ def get_data():
     return pd.read_csv(st.session_state.dataset_url)
 
 
-def setup_llms():
+def setup_llms_forecast():
     st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', 
                             system="You are a bot who is an expert on timeseries model prediction.")
 
-def setup_llm_chains():
+def setup_llm_chains_forecast():
 
     #build the conversation chain
     pred_assistant_prompt = PromptTemplate(input_variables=['input', 'history'], template=PRED_ASSISTANT_PROMPT_TEMPLATE)
     st.session_state.assistant_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant, prompt=pred_assistant_prompt, output_key='answer')
     
-def query_chain():
+def query_forecast_chain():
     input_query = st.session_state.current_input
-    st.session_state.messages.append({"speaker" : "user", "content": input_query})
+    st.session_state.messages_forecast.append({"speaker" : "user", "content": input_query})
     resp = st.session_state.assistant_chain.invoke({'input':input_query})
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
-    st.session_state.messages.append({"speaker" : "AI",
+    st.session_state.messages_forecast.append({"speaker" : "AI",
                                     "content": resp['answer']})
 
 
@@ -41,16 +41,16 @@ def query_chain():
 def build_chat_window_assistant():
     #st.markdown(f'<h3 style="color:black; text-align:center">Forecasting Assistant</h3>', unsafe_allow_html=True)
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    if "messages_forecast" not in st.session_state:
+        st.session_state.messages_forecast = []
     st.chat_input(placeholder = 'Enter query here ...', 
-                on_submit=query_chain,
+                on_submit=query_forecast_chain,
                 key='current_input')
     chat_row_assistant = st.empty()
     #context_row = st.empty()
     with chat_row_assistant.container(height=230, border=True):
         #display the chat history so far
-        for msg in st.session_state.messages:
+        for msg in st.session_state.messages_forecast:
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
 
@@ -120,17 +120,6 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
     power_pred_df['mean_label'] = (timesteps+1)*['predicted mean']
     power_pred_df['stddev_label'] = (timesteps+1)*['predicted std deviation']
 
-
-    # actual_kpi_lines = alt.Chart(power_pred_df, height=600).mark_line().encode(x=alt.X('hours'),
-    #                                                                 y=alt.Y(f'{pred_linechart_kpi}', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
-    #                                                                 color=alt.Color('actual_kpi_label',legend=alt.Legend(
-    #                                                                                             orient='none',
-    #                                                                                             legendX=450, legendY=0,
-    #                                                                                             direction='horizontal',
-    #                                                                                             titleAnchor='middle'
-    #                                                                                             )
-    #                                                                                     )
-    #                                                                         )
     line_plot_df = power_pred_df[['hours', 
                                   f'{pred_linechart_kpi}',
                                     f'{pred_linechart_kpi}_pred_mean']]
@@ -237,8 +226,8 @@ def main():
     st.html("../timeseries_page_styles.html")
     st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
     st.session_state.llm='llama3'
-    setup_llms()
-    setup_llm_chains()
+    setup_llms_forecast()
+    setup_llm_chains_forecast()
     st.session_state.rerun_dashboard = True
     kpi_list = ['total_energy_output', 'reservoir_level', 'water_flow_rate', 'co2_emissions']
     # read csv from a github repo
