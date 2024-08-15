@@ -37,6 +37,7 @@ from scripts.ragapp import  check_sentence_hallucination, \
                             process_documents, load_documents, \
                             split_documents, load_vector_db, \
                             update_vector_db
+from timeseries_forecasting import *
 from st_aggrid import AgGrid
 
 
@@ -287,44 +288,44 @@ def draw_plant_operational_status(plant_name):
     if plant_status==2:
         st.image('../assets/images/orange_button.png',)
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
-def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
+# @st.experimental_fragment(run_every=REFRESH_TIMER)
+# def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
-    timesteps = 167
-    t= st.session_state.timestamps[-1]
-    plant_power_data_predict_mean = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
-    plant_power_data_predict_std = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
-    kpi_data = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
+#     timesteps = 167
+#     t= st.session_state.timestamps[-1]
+#     plant_power_data_predict_mean = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
+#     plant_power_data_predict_std = st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
+#     kpi_data = list(st.session_state.full_data_df[st.session_state.full_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
 
-    power_pred_df = pd.DataFrame()
-    power_pred_df['timestep'] = np.arange(timesteps+1)
+#     power_pred_df = pd.DataFrame()
+#     power_pred_df['timestep'] = np.arange(timesteps+1)
 
-    #current data
-    kpi_data.extend([float("NaN")]*(timesteps-t))
-    power_pred_df[f'{pred_linechart_kpi}'] = kpi_data
-    #pred mean
-    pred_mean_nan = [float("NaN")]*t
-    pred_mean_future = plant_power_data_predict_mean[t:]
-    pred_mean_nan.extend(pred_mean_future)
+#     #current data
+#     kpi_data.extend([float("NaN")]*(timesteps-t))
+#     power_pred_df[f'{pred_linechart_kpi}'] = kpi_data
+#     #pred mean
+#     pred_mean_nan = [float("NaN")]*t
+#     pred_mean_future = plant_power_data_predict_mean[t:]
+#     pred_mean_nan.extend(pred_mean_future)
 
-    #pred_std
-    pred_std_nan = [float("NaN")]*t
-    pred_std_future = plant_power_data_predict_std[t:]
-    pred_std_nan.extend(pred_std_future)
+#     #pred_std
+#     pred_std_nan = [float("NaN")]*t
+#     pred_std_future = plant_power_data_predict_std[t:]
+#     pred_std_nan.extend(pred_std_future)
 
-    #add cols to df
-    power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = np.array(pred_mean_nan)+np.array(pred_std_nan)
-    power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = np.array(pred_mean_nan)-np.array(pred_std_nan)
-    power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan
+#     #add cols to df
+#     power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = np.array(pred_mean_nan)+np.array(pred_std_nan)
+#     power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = np.array(pred_mean_nan)-np.array(pred_std_nan)
+#     power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan
 
-    st.markdown("<h2 style='text-align: center; color: black;'> Power generation forecasting </h2>", unsafe_allow_html=True)
+#     st.markdown("<h2 style='text-align: center; color: black;'> Power generation forecasting </h2>", unsafe_allow_html=True)
 
-    kpi_lines = alt.Chart(power_pred_df).mark_line().transform_fold(fold=[f'{pred_linechart_kpi}', f'{pred_linechart_kpi}_pred_mean']).mark_line().encode(x='timestep', y=alt.Y('value:Q').title("KPI"),color='key:N')
+#     kpi_lines = alt.Chart(power_pred_df).mark_line().transform_fold(fold=[f'{pred_linechart_kpi}', f'{pred_linechart_kpi}_pred_mean']).mark_line().encode(x='timestep', y=alt.Y('value:Q').title("KPI"),color='key:N')
 
-    pred_band = (alt.Chart(power_pred_df).mark_area(opacity=0.3, color= 'azure').encode(x='timestep', 
-                                                        y=alt.Y(f'{pred_linechart_kpi}_pred_upper:Q').title(""),
-                                                        y2=alt.Y2(f'{pred_linechart_kpi}_pred_lower:Q').title("")))
-    st.altair_chart((kpi_lines+pred_band), use_container_width=True)
+#     pred_band = (alt.Chart(power_pred_df).mark_area(opacity=0.3, color= 'azure').encode(x='timestep', 
+#                                                         y=alt.Y(f'{pred_linechart_kpi}_pred_upper:Q').title(""),
+#                                                         y2=alt.Y2(f'{pred_linechart_kpi}_pred_lower:Q').title("")))
+#     st.altair_chart((kpi_lines+pred_band), use_container_width=True)
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def plot_gauge_chart(plant_name, 
@@ -641,18 +642,18 @@ def query_chain_anomaly_assistant():
  
     
     #save the query in the chat history
-    st.session_state.messages.append({"speaker" : "user", "content": query_text})
+    st.session_state.messages_anomaly.append({"speaker" : "user", "content": query_text})
     
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
-    st.session_state.messages.append({"speaker" : "AI",
+    st.session_state.messages_anomaly.append({"speaker" : "AI",
                                     "content": anno_result})
 
 
 def build_chat_window_anomaly():
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    if "messages_anomaly" not in st.session_state:
+        st.session_state.messages_anomaly = []
     st.chat_input(placeholder = 'Enter query here ...', 
                 on_submit=query_chain_anomaly_assistant,
                 key='current_input_anomaly')
@@ -660,7 +661,7 @@ def build_chat_window_anomaly():
     #context_row = st.empty()
     with chat_row.container(height=450, border=True):
         #display the chat history so far
-        for msg in st.session_state.messages:
+        for msg in st.session_state.messages_anomaly:
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
         #display the documents in the context used to come up with the answer
@@ -782,7 +783,7 @@ def main():
         page_icon="✅",
         layout="wide",
     )
-    st.html("../styles_gpt.html")
+    st.html("../dashboard_styles.html")
     #st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
@@ -842,7 +843,7 @@ def main():
             authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            grid_overview_tab, indiv_plant_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':paperclip: Assistant'])
+            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':paperclip: Assistant'])
 
             #---- SET UP THE PAGE STRUCTURE ---
 
@@ -907,77 +908,66 @@ def main():
                 #         #write_llm_summarization()
                 #         pass
 
-            with indiv_plant_tab:
-                pass
+            with forecast_tab:
 
-                # pred_linechart_kpi = 'total_energy_output'
-                # plant_name = st.selectbox('Select plant' , st.session_state.cur_data_df['name'].unique())
-
-                # indiv_plant_row1 = st.empty()
-                # indiv_plant_row2 = st.empty()
-                # with indiv_plant_row1.container(height=500, border=True):
-                #     indiv_plant_row1_col1, indiv_plant_row1_col2 = st.columns([0.2, 0.8])
-
-                #     with indiv_plant_row1_col1:
-                        
-                #         #draw_plant_operational_status(plant_name)
-                #         pass 
-                #     with indiv_plant_row1_col2:
-
-                #         #plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
-                #         pass
-                # with indiv_plant_row2.container(height=500, border=True):
-                #     st.html(f'<span class="kpi_card"></span>')
-
-
-                #     indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
+                setup_llms_forecast()
+                setup_llm_chains_forecast()
+                # read csv from a github repo
+                st.session_state.forecast_dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
+                st.session_state.full_forecast_data_df = get_data_forecast()
+                plant_names = st.session_state.full_forecast_data_df['name'].unique()
+                pred_linechart_kpi = 'total_energy_output'
+                pred_df = None
+                #design the UI
+                with stylable_container(
+                    key='page_header',
+                    css_styles='''
+                    {
+                    width: 90%;
+                    justify-content: space-around;
+                    border-radius: 15px;
+                    background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+                    padding-left:30px;
+                    padding-bottom:20px
+                    }
+            ''',
+                ):
+                    st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([0.27, 0.63, 0.1])
+                with col1:
+                    param_form_container = st.container(height=800, border=True)
+                    run_eval_container = st.container(height=250, border=True)
+                with col2:
+                    pred_stats_container = st.container(height=300, border=False)   
                     
-                #     with indiv_plant_row2_col1.container(border=True):
-                #         #gauge chart for reservoir_level
-                #         #plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
-                #         st.markdown("<h4 style='text-align: center; color: black;'> Reservoir Level </h4>", unsafe_allow_html=True)
-                #         build_indiv_plant_kpi_card(plant_name, 'reservoir_level',plot_title="Reservoir Level")
+                    pred_plot_container = st.container(height=750, border=True)
+                    with pred_plot_container:
+                        st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
+                with col3:
+                    chat_container = st.container(height=150, border=False)
+                    with chat_container:
+                        with st.popover(":headphones:", help='Model Consultant'):
+                            build_chat_window_forecast_assistant()
+                    blank_container = st.container(height=900, border=False)
 
-                #     with indiv_plant_row2_col2.container(border=True):
-                #         #gauge chart for co2 emissions
-                #         st.markdown("<h4 style='text-align: center; color: black;'> CO2 Emissions </h4>", unsafe_allow_html=True)
+                with col1:
+                    with param_form_container:
+                        build_param_selection_form()
+                    with run_eval_container:
+                        with st.form("Evaluate on ", border=False):
+                            st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
+                            plant_name = st.selectbox('Select Plant', plant_names)
+                            predict_button = st.form_submit_button("Run Predition")
+                        if predict_button:
+                            with pred_plot_container:
+                                pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
 
-                #         build_indiv_plant_kpi_card(plant_name, 
-                #                         'co2_emissions', 
-                #                         plot_title='CO2 Emissions', 
-                #                         full_range=[0, 24],
-                #                         low_range=[0, 10],
-                #                         mid_range=[10, 20],
-                #                         threshold=22)
+                with col2:
+                        with pred_stats_container:
+                            st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
 
-                #     with indiv_plant_row2_col3.container(border=True):
-                #         st.markdown("<h4 style='text-align: center; color: black;'> Water flow rate </h4>", unsafe_allow_html=True)
-
-                #         #gauge chart for water_flow_level
-                #         system_cap =  st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name]['capacity (mw)'].iloc[0]
-                #         if system_cap < 10:
-                #             water_flow_multiplier = 1
-
-                #         elif system_cap < 100:
-                #             water_flow_multiplier = 10
-
-                #         else:
-                #             water_flow_multiplier = 100
-
-                #         gauge_range = [0, 70*water_flow_multiplier]
-                #         light_gray_range = [0, 20*water_flow_multiplier]
-                #         gray_range = [20*water_flow_multiplier, 50*water_flow_multiplier]
-                #         threshold = 65*water_flow_multiplier
-
-                #         build_indiv_plant_kpi_card(plant_name, 
-                #                         'water_flow_rate', 
-                #                         plot_title='Water flow rate', 
-                #                         full_range=gauge_range,
-                #                         low_range=light_gray_range,
-                #                         mid_range=gray_range,
-                #                         threshold=threshold)
-
-                #build_anomaly_timeline(plant_name)
+                            if pred_df is not None:
+                                show_error_metrics(pred_df, pred_linechart_kpi)
 
             with doc_assist_tab:
                 
