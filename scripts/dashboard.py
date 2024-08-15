@@ -9,7 +9,7 @@ import streamlit as st  # 🎈 data web app development
 from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
 from streamlit_timeline import st_timeline
-
+from streamlit_extras.stylable_container import stylable_container
 import altair as alt
 import folium
 from folium.plugins import Realtime, MarkerCluster
@@ -839,8 +839,9 @@ def main():
         if st.session_state.count==1:
             pass 
         else:
-        
-            authenticator.logout('Logout', 'main')
+            with st.container():
+                st.html('<span class="logout"></span>')
+                authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
             grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':paperclip: Assistant'])
@@ -848,8 +849,18 @@ def main():
             #---- SET UP THE PAGE STRUCTURE ---
 
             with grid_overview_tab:
-                #create the map container
-                st.markdown("<h2 style='font-family: serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
+                #create the header container
+                with stylable_container(key='anomaly_header',
+                                        css_styles=''' 
+                                        {
+                                            text-align: center;
+                                            padding: 20px;
+                                            background: #4b6cb7;
+                                            color: white;
+                                            border-radius: 10px;
+                                        }
+                                        '''):
+                    st.markdown("<h2 style='font-family: serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
 
                 with st.container(height=635, border=False):
                     map_col, chat_col = st.columns([0.7, 0.3])
@@ -920,35 +931,39 @@ def main():
                 pred_df = None
                 #design the UI
                 with stylable_container(
-                    key='page_header',
+                    key='forecast_header',
                     css_styles='''
                     {
-                    width: 90%;
-                    justify-content: space-around;
-                    border-radius: 15px;
-                    background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-                    padding-left:30px;
-                    padding-bottom:20px
+                        text-align: center;
+                        padding: 20px;
+                        background: #4b6cb7;
+                        color: white;
+                        border-radius: 10px;
                     }
             ''',
                 ):
                     st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
-                col1, col2, col3 = st.columns([0.27, 0.63, 0.1])
+                col1, col2, = st.columns([0.27, 0.73])
                 with col1:
                     param_form_container = st.container(height=800, border=True)
                     run_eval_container = st.container(height=250, border=True)
+
                 with col2:
-                    pred_stats_container = st.container(height=300, border=False)   
-                    
-                    pred_plot_container = st.container(height=750, border=True)
+                    pred_stats_container = st.container(height=250, border=True)
+                    with pred_stats_container: 
+                        forecast_metrics_col, forecast_chat_col = st.columns([0.8, 0.2]) 
+
+                    pred_plot_container = st.container(height=800, border=True)
+
+
                     with pred_plot_container:
                         st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
-                with col3:
+                
+                with forecast_chat_col:
                     chat_container = st.container(height=150, border=False)
                     with chat_container:
                         with st.popover(":headphones:", help='Model Consultant'):
                             build_chat_window_forecast_assistant()
-                    blank_container = st.container(height=900, border=False)
 
                 with col1:
                     with param_form_container:
@@ -964,10 +979,11 @@ def main():
 
                 with col2:
                         with pred_stats_container:
-                            st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
+                            with forecast_metrics_col:
+                                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
 
-                            if pred_df is not None:
-                                show_error_metrics(pred_df, pred_linechart_kpi)
+                                if pred_df is not None:
+                                    show_error_metrics(pred_df, pred_linechart_kpi)
 
             with doc_assist_tab:
                 
