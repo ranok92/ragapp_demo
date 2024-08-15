@@ -27,7 +27,7 @@ def setup_llm_chains_forecast():
     st.session_state.assistant_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant, prompt=pred_assistant_prompt, output_key='answer')
     
 def query_chain_forecast():
-    input_query = st.session_state.current_input
+    input_query = st.session_state.current_forecast_input
     st.session_state.messages_forecast.append({"speaker" : "user", "content": input_query})
     resp = st.session_state.assistant_chain.invoke({'input':input_query})
     # rel_sources = [doc.metadata['source'] for doc in docs]
@@ -237,12 +237,11 @@ def main():
         key='page_header',
         css_styles='''
         {
-        width: 90%;
-        justify-content: space-around;
-        border-radius: 15px;
-        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        padding-left:30px;
-        padding-bottom:20px
+            text-align: center;
+            padding: 20px;
+            background: #4b6cb7;
+            color: white;
+            border-radius: 10px;
         }
 ''',
     ):
