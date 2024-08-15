@@ -13,7 +13,7 @@ from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
 
 def get_data_forecast():
-    return pd.read_csv(st.session_state.dataset_url)
+    return pd.read_csv(st.session_state.forecast_dataset_url)
 
 
 def setup_llms_forecast():
@@ -45,7 +45,7 @@ def build_chat_window_forecast_assistant():
         st.session_state.messages_forecast = []
     st.chat_input(placeholder = 'Enter query here ...', 
                 on_submit=query_chain_forecast,
-                key='current_input')
+                key='current_forecast_input')
     chat_row_assistant = st.empty()
     #context_row = st.empty()
     with chat_row_assistant.container(height=230, border=True):
@@ -54,7 +54,7 @@ def build_chat_window_forecast_assistant():
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
 
-def build_data_filter_window():
+def build_param_selection_form():
     st.markdown(f'<h3 style="color:black ;text-align:center">Param Selection</h2>', unsafe_allow_html=True)
     param_select_form = st.form('Select params', border=False)
     with param_select_form:
@@ -224,7 +224,6 @@ def main():
     )
     st.html("../timeseries_page_styles.html")
     st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
-    st.session_state.llm='llama3'
     setup_llms_forecast()
     setup_llm_chains_forecast()
     # read csv from a github repo
@@ -267,7 +266,7 @@ def main():
 
     with col1:
         with param_form_container:
-           build_data_filter_window()
+           build_param_selection_form()
         with run_eval_container:
             with st.form("Evaluate on ", border=False):
                 st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
