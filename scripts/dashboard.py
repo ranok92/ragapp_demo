@@ -59,13 +59,13 @@ def build_llm_infrastructure():
  
 def draw_realtime_map():
 
-    m = folium.Map(location=[st.session_state.cur_data_df['latitude'].mean(), st.session_state.cur_data_df['longitude'].mean()], zoom_start=10)
+    m = folium.Map(location=[st.session_state.full_data_df['latitude'].mean(), st.session_state.full_data_df['longitude'].mean()], zoom_start=10)
     source_anomaly= 'http://localhost:8000/anomalous.geojson'
     container = MarkerCluster(icon_create_function=icon_create_function).add_to(m)
     pt_layer_func = JsCode('''(f, latlng) => { 
                                 var rad = f.properties.people_affected/20
                                 var popup_options = {className:'popupclass'}
-                                var popup_msg = 'Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected
+                                var popup_msg = '<p> Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected + "</p>"
                                 return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg, popup_options); }
                            
                            ''')
@@ -426,74 +426,6 @@ def build_anomaly_timeline(plant_name):
     print("TIMELINE ITEMS", timeline_items)
     st_timeline(timeline_items)
 
-
-@st.experimental_fragment(run_every=REFRESH_TIMER)
-def build_indiv_plant_tab():
-
-    pred_linechart_kpi = 'total_energy_output'
-    plant_name = st.selectbox('Select plant' , st.session_state.cur_data_df['name'].unique())
-
-    indiv_plant_row1 = st.empty()
-    indiv_plant_row2 = st.empty()
-    with indiv_plant_row1.container(height=500):
-        indiv_plant_row1_col1, indiv_plant_row1_col2 = st.columns([0.2, 0.8])
-
-        with indiv_plant_row1_col1:
-            
-            draw_plant_operational_status(plant_name)
-
-        with indiv_plant_row1_col2:
-
-            plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
-            
-    with indiv_plant_row2.container(height=500, border=True):
-        
-
-        indiv_plant_row2_col1, indiv_plant_row2_col2, indiv_plant_row2_col3 = st.columns(3, gap='large')
-        
-        with indiv_plant_row2_col1:
-            
-            #gauge chart for reservoir_level
-            plot_gauge_chart(plant_name, 'reservoir_level', plot_title="Reservoir Level")
-            
-        with indiv_plant_row2_col2:
-            
-            #gauge chart for co2 emissions
-            plot_gauge_chart(plant_name, 
-                            'co2_emissions', 
-                            plot_title='CO2 Emissions', 
-                            full_range=[0, 24],
-                            low_range=[0, 10],
-                            mid_range=[10, 20],
-                            threshold=22)
-
-        with indiv_plant_row2_col3:
-            
-            #gauge chart for water_flow_level
-            system_cap =  st.session_state.cur_data_df[st.session_state.cur_data_df['name']==plant_name]['capacity (mw)'].iloc[0]
-            if system_cap < 10:
-                water_flow_multiplier = 1
-
-            elif system_cap < 100:
-                water_flow_multiplier = 10
-
-            else:
-                water_flow_multiplier = 100
-
-            gauge_range = [0, 70*water_flow_multiplier]
-            light_gray_range = [0, 20*water_flow_multiplier]
-            gray_range = [20*water_flow_multiplier, 50*water_flow_multiplier]
-            threshold = 65*water_flow_multiplier
-
-            plot_gauge_chart(plant_name, 
-                            'water_flow_rate', 
-                            plot_title='Water flow rate', 
-                            full_range=gauge_range,
-                            low_range=light_gray_range,
-                            mid_range=gray_range,
-                            threshold=threshold)
-
-
 # ----- CHATBOT ASSISTANT TAB -----
 
 def setup_llms():
@@ -776,6 +708,70 @@ def get_data_full():
 
 #---SET BACKGROUND --- 
 
+#---- Build solar forecast tab
+
+def build_forecast_tab():
+    print("running forecast tab")
+    setup_llms_forecast()
+    setup_llm_chains_forecast()
+    # read csv from a github repo
+    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
+    st.session_state.full_forecast_data_df = get_data_forecast()
+    plant_names = st.session_state.full_forecast_data_df['name'].unique()
+    pred_linechart_kpi = 'total_energy_output'
+    pred_df = None
+    #design the UI
+    with stylable_container(
+        key='forecast_header',
+        css_styles='''
+        {
+            text-align: center;
+            padding: 20px;
+            background: #4b6cb7;
+            color: white;
+            border-radius: 10px;
+        }
+''',
+    ):
+        st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
+    col1, col2, = st.columns([0.27, 0.73])
+    with col1:
+        param_form_container = st.container(height=800, border=True)
+        run_eval_container = st.container(height=250, border=True)
+
+    with col2:
+        pred_stats_container = st.container(height=280, border=True)
+        
+        pred_plot_container = st.container(height=770, border=True)
+
+
+        with pred_plot_container:
+            st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
+    
+    #with pred_stats_container:
+        
+
+    with col1:
+        with param_form_container:
+            build_param_selection_form()
+            with st.popover(":headphones:", help='Model Consultant'):
+                build_chat_window_forecast_assistant()
+
+        with run_eval_container:
+            with st.form("Evaluate on ", border=False):
+                st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
+                plant_name = st.selectbox('Select Plant', plant_names)
+                predict_button = st.form_submit_button("Run Predition")
+            if predict_button:
+                with pred_plot_container:
+                    pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
+
+    with col2:
+            with pred_stats_container:
+                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
+
+                if pred_df is not None:
+                    show_error_metrics(pred_df, pred_linechart_kpi)
 
 def main():
     st.set_page_config(
@@ -850,7 +846,7 @@ def main():
 
             with grid_overview_tab:
                 #create the header container
-                with stylable_container(key='anomaly_header',
+                header_container =  stylable_container(key='anomaly_header',
                                         css_styles=''' 
                                         {
                                             text-align: center;
@@ -859,10 +855,14 @@ def main():
                                             color: white;
                                             border-radius: 10px;
                                         }
-                                        '''):
-                    st.markdown("<h2 style='font-family: serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
+                                        ''')
+                map_and_chat_container = st.container(height=640, border=False)
+                grid_overview_container = st.container(height=530, border=False)
+                
+                with header_container:
+                    st.markdown("<h2 style='font-family: sans-serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
 
-                with st.container(height=635, border=False):
+                with map_and_chat_container:
                     map_col, chat_col = st.columns([0.7, 0.3])
 
                     with map_col:
@@ -874,29 +874,7 @@ def main():
                         build_chat_window_anomaly()
 
 
-                # col1, col2 = st.columns(2)
-
-                # with col1:
-                #     historic_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='line_chart')
-                # with col2:
-                #     bar_chart_kpi = st.selectbox("Select KPI", st.session_state.kpi_list, key='bar_chart')
-
-                #calculate daily averages of different KPIS
-                # df_grouped = st.session_state.full_data_df.groupby(['timestamp']).agg({historic_chart_kpi:['mean']})
-                # kpi_week_data = np.array(df_grouped[historic_chart_kpi]['mean']).reshape((-1 ,24))
-                # kpi_week_min = kpi_week_data.min(axis=0)
-                # kpi_week_max = kpi_week_data.max(axis=0)
-
-                # df_historic_weekly_minmax = pd.DataFrame()
-                # df_historic_weekly_minmax[f'{historic_chart_kpi}_min'] = kpi_week_min 
-                # df_historic_weekly_minmax[f'{historic_chart_kpi}_max'] = kpi_week_max 
-                # df_historic_weekly_minmax['timestamp'] = np.arange(24)
-
-                grid_overview_row1 = st.empty()
-                #grid_overview_row2 = st.empty()
-
-                # creating a single-element container
-                with grid_overview_row1.container(height=500, border=False):
+                with grid_overview_container:
 
                     # create two columns for charts
                     fig_col1, fig_col2 = st.columns([0.7,0.3])
@@ -920,75 +898,11 @@ def main():
                 #         pass
 
             with forecast_tab:
-
-                setup_llms_forecast()
-                setup_llm_chains_forecast()
-                # read csv from a github repo
-                st.session_state.forecast_dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
-                st.session_state.full_forecast_data_df = get_data_forecast()
-                plant_names = st.session_state.full_forecast_data_df['name'].unique()
-                pred_linechart_kpi = 'total_energy_output'
-                pred_df = None
-                #design the UI
-                with stylable_container(
-                    key='forecast_header',
-                    css_styles='''
-                    {
-                        text-align: center;
-                        padding: 20px;
-                        background: #4b6cb7;
-                        color: white;
-                        border-radius: 10px;
-                    }
-            ''',
-                ):
-                    st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
-                col1, col2, = st.columns([0.27, 0.73])
-                with col1:
-                    param_form_container = st.container(height=800, border=True)
-                    run_eval_container = st.container(height=250, border=True)
-
-                with col2:
-                    pred_stats_container = st.container(height=250, border=True)
-                    with pred_stats_container: 
-                        forecast_metrics_col, forecast_chat_col = st.columns([0.8, 0.2]) 
-
-                    pred_plot_container = st.container(height=800, border=True)
-
-
-                    with pred_plot_container:
-                        st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
-                
-                with forecast_chat_col:
-                    chat_container = st.container(height=150, border=False)
-                    with chat_container:
-                        with st.popover(":headphones:", help='Model Consultant'):
-                            build_chat_window_forecast_assistant()
-
-                with col1:
-                    with param_form_container:
-                        build_param_selection_form()
-                    with run_eval_container:
-                        with st.form("Evaluate on ", border=False):
-                            st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
-                            plant_name = st.selectbox('Select Plant', plant_names)
-                            predict_button = st.form_submit_button("Run Predition")
-                        if predict_button:
-                            with pred_plot_container:
-                                pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
-
-                with col2:
-                        with pred_stats_container:
-                            with forecast_metrics_col:
-                                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
-
-                                if pred_df is not None:
-                                    show_error_metrics(pred_df, pred_linechart_kpi)
+                build_forecast_tab()
 
             with doc_assist_tab:
-                
                 build_doc_assistant_tab()
-        time.sleep(4)
+        #time.sleep(4)
     elif authentication_status == False:
         st.error('Username/password is incorrect')
     elif authentication_status == None:
