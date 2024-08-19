@@ -78,7 +78,7 @@ def build_param_selection_form():
                                         ['Opt1', 'Opt2', 'Opt3'])
     
         retrieve_data = st.form_submit_button("Set Params")
-
+   
 def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     timesteps = 167
@@ -226,8 +226,10 @@ def main():
     st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
     setup_llms_forecast()
     setup_llm_chains_forecast()
+    print("running forecast tab")
+
     # read csv from a github repo
-    st.session_state.forecast_dataset_url = "../data/dashboard/dashboard_monitoring_data.csv"
+    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
     st.session_state.full_forecast_data_df = get_data_forecast()
     plant_names = st.session_state.full_forecast_data_df['name'].unique()
     pred_linechart_kpi = 'total_energy_output'
