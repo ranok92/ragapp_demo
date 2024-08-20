@@ -23,6 +23,7 @@ import plotly.graph_objects as go
 import yaml
 from yaml.loader import SafeLoader
 import statistics
+import datetime
 #--- llm imports 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.llms import Ollama
@@ -431,7 +432,7 @@ def build_anomaly_timeline(plant_name):
 def setup_llms():
 
     st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = Ollama(model='llama3.1', system="You are an LLM that is excellent at following instructions.")
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', system="You are an LLM who is logical and is excellent at following instructions.")
     st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
 
 def setup_llm_chains():
@@ -448,7 +449,7 @@ def setup_llm_chains():
 
     #build the router chain
     router_prompt = PromptTemplate(
-        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_3
+        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_4
     )
     st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
@@ -456,23 +457,16 @@ def setup_llm_chains():
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
     st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
 
-    #build the table summarizer chain
-    db_summarizer_prompt = PromptTemplate(
-        input_variables=['input'], template=TABLE_SUMMARIZER_TEMPLATE
-    )
-    st.session_state.table_summarizer_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant,
-                                                       prompt=db_summarizer_prompt)
-    
     #build the nlp to pandas retriever chain
     nl_to_pandas_prompt = PromptTemplate(
-        input_variables=['input'], template=NL_TO_PANDAS_QUERY_TEMPLATE
+        input_variables=['input'], template=NL_TO_PANDAS_QUERY_TEMPLATE_OUTAGE
     )
     st.session_state.pandas_query_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant,
                                                        prompt=nl_to_pandas_prompt)
     
     #build the table data analyzer chain
     tabular_data_summarizer_prompt = PromptTemplate(
-        input_variables=['table_data'], template=TABLE_SUMMARIZER_TEMPLATE
+        input_variables=['table_data'], template=TABLE_SUMMARIZER_TEMPLATE_OUTAGE
     )
     
     st.session_state.tabular_data_summarizer_chain = LLMChain(
@@ -549,10 +543,11 @@ def query_chain_anomaly_assistant():
         st.session_state.response = result
         st.session_state.response_context = ""  
 
-    if is_qa.strip().lower()=='power':
+    if is_qa.strip().lower()=='outage':
 
         #do stuff
-        resp = st.session_state.pandas_query_chain.invoke(input_dict)
+        resp = st.session_state.pandas_query_chain.invoke({'input': query_text})
+        print("RESP: ", resp)
         db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
         print("PANDA Query : ", db_query)
         table_data = eval(db_query)
