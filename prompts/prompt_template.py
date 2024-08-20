@@ -15,17 +15,30 @@ ROUTER_PROMPT_TEMPLATE_2 = "Given an input, decide whether responding to it woul
 
 
 ROUTER_PROMPT_TEMPLATE_3 = "Given an input, decide whether responding to it would require fact based question answering capabilitesl, a part of a general conversation, \
-                    need to consult a powerplant related table or require assistance with creative writing. \n \
-                    The table contains information regarding power plants within an electrical grid, \
-                    their names, locations, details regarding power generation and different anomalies pertaining to power plants. \
-                    \n Here is the input \n\n {input}.\n\n Repond with one word: 'power', 'conv','qa', or 'writing'. \
-                    'power' if you think it would need to access the powerplant tabular data, \
+                    need to consult an electrical grid outage monitoring table or require assistance with creative writing. \n \
+                    The table contains information regarding different locations within an electrical grid, \
+                    the postal codes, locations, outage duration and details related to different areas of the region. \
+                    \n Here is the input \n\n {input}.\n\n Repond with one word: 'outage', 'conv','qa', or 'writing'. \
+                    'outage' if you think it would need to access the outage monitoring table, \
                     'conv', if you think it is a part of a regular conversation, \
                     'qa', if you think it would require fact based question answering capabilities, and \
                     'writing' if you understand that \
                     the input is requesting help with creative writing. \n \
                     Explain your answer.\n \
                     Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'power', 'conv', 'qa' or 'writing'."
+
+ROUTER_PROMPT_TEMPLATE_4 = "Given an input, decide whether responding to it would require fact based question answering capabilitesl, a part of a general conversation, \
+                    need to consult an electrical grid outage monitoring table or require assistance with creative writing. \
+                    Always check for compatibility in the outage category first. If you do not find a match, check for the rest. \n \
+                    The outage monitoring table contains information regarding affected areas, \
+                    the postal codes, outage duration, people affected,  start and end times of the outages. \
+                    \n Here is the input \n\n {input}.\n\n Repond with one word: 'outage', 'conv','qa', or 'writing'. \
+                    'outage' if you think it would need to access the outage monitoring table, \
+                    'conv', if you think it is a part of a regular conversation, \
+                    'qa', if you think it would require general question answering capabilities, and \
+                    'writing' if you understand that the input is requesting help with creative writing. \n \
+                    Explain your answer.\n \
+                    Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'outage', 'conv', 'qa' or 'writing'."
 
 
 CONV_PROMPT_TEMPLATE = "You are a helpful bot who can hold a polite conversation with a fellow human. \
@@ -41,6 +54,8 @@ RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provide
          The context: {context} \n \
          Human's question: {input}"
 
+
+PRED_ASSISTANT_PROMPT_TEMPLATE = "Answer the user's query absed"
 
 TABLE_SUMMARIZER_TEMPLATE = '''
 You are a bot who specializes on reading tabular data and summarizing the contents. \n
@@ -74,6 +89,52 @@ Response:
    
 '''
 
+
+TABLE_SUMMARIZER_TEMPLATE_OUTAGE = '''
+You are a bot who specializes on reading tabular data and summarizing the contents. \n
+The table data you will read holds data related to outages occured in a power grid system. \n
+Summarize the contents of the rows emphasizing on 'people_affected', 'outage_category' and their respective 'start_time'. \n  
+
+\n\n Just provide your thoughts. No need to ask for feedback. Always respond in third person.\n
+Respond ONLY with a dictionary with two keys: 'summary' and 'thoughts'.
+====
+Example 1:
+
+    Table data:
+        postal_code	timestamp	latitude	longitude	datetime	outage_category	people_affected	start_time	end_time
+        G5Y 6N1	89	46.137345	-70.678584	2024-01-04 17:00	System Improvement	3194	2024-01-04 17:00	2024-01-04 19:00
+        H9B 1T2	89	45.500104	-73.790448	2024-01-04 17:00	System Improvement	386	2024-01-04 17:00	2024-01-04 19:00
+        J2E 1C7	89	45.905074	-72.534624	2024-01-04 17:00	Natural Cause	314	2024-01-04 17:00	2024-01-04 19:00
+        H7C 1N3	89	45.611089	-73.645161	2024-01-04 17:00	Environmental Factors	4910	2024-01-04 17:00	2024-01-04 19:00
+        G3G 2Y8	89	46.894125	-71.373364	2024-01-04 17:00	Power System Repair	1442	2024-01-04 17:00	2024-01-04 19:00
+        H9H 4A8	89	45.469722	-73.856587	2024-01-04 17:00	System Improvement	455	2024-01-04 17:00	2024-01-04 19:00
+        H9J 1L7	89	45.453199	-73.864731	2024-01-04 17:00	External Factors	4238	2024-01-04 17:00	2024-01-04 19:00
+
+    Response:
+        "summary" : "On January 4, 2024, multiple outages were reported across various locations, affecting a total of 18,939 people. \
+            The outages were categorized under system improvement, natural causes, environmental factors, power system repair, and external factors. \
+                Each outage began at 17:00 and was resolved by 19:00 on the same day. The largest outage affected 4,910 people in the postal code H7C 1N3, \
+                    attributed to environmental factors.", 
+        "thoughts": "The simultaneous occurrence of these outages across different regions suggests a coordinated effort, likely aimed at modernizing and \
+                reinforcing the power grid. While the planned outages for system improvements are a positive sign of proactive maintenance, the disruptions \
+                    caused by natural and environmental factors reveal underlying vulnerabilities. It's clear that while the grid is evolving, nature remains a formidable challenge, \
+                reminding us that our infrastructure must not only be advanced but also resilient. The large-scale impact in areas affected by external and environmental \
+                    factors indicates that these regions may benefit from more aggressive investments in grid hardening, such as weatherproofing and strategic \
+                    vegetation management. In the long term, integrating predictive analytics and real-time monitoring could reduce the frequency and impact of such outages, \
+                            enhancing overall grid stability and customer satisfaction. The brief, yet impactful, two-hour window of these outages also suggests a well-organized \
+                                response team, capable of restoring power swiftly—an encouraging sign for future incidents."    
+
+====
+
+Here is the current table information:
+Table data:
+    {table_data}
+
+Response:
+
+'''
+
+
 NL_TO_PANDAS_QUERY_TEMPLATE = '''
 You are a bot who specializes on converting nautral language to Pandas retrieval query.
 Pandas is a python library for database management.
@@ -102,6 +163,43 @@ Example 1:
     User query: "Describe the status of Plant Chelsea at timestamp 57?"
 Response:
     "query" : "st.session_state.cumm_data_df[(st.session_state.cumm_data_df['name']=='Chelsea') & (st.session_state.cumm_data_df['timestamp']==57)]"
+
+====
+
+User query : {input}
+
+Response : 
+'''
+
+NL_TO_PANDAS_QUERY_TEMPLATE_OUTAGE =  '''
+You are a bot who specializes on converting nautral language to Pandas retrieval query.
+Pandas is a python library for database management.
+You are provided with a table schema with column names and their types. 
+================
+Table variable name: st.session_state.cumm_data_df
+Table schema: 
+    postal_code         object
+    timestamp            int64
+    latitude           float64
+    longitude          float64
+    datetime            object
+    outage_category     object
+    people_affected      int64
+    start_time          object
+    end_time            object
+==================
+Your job is to figure out a pandas query to fetch the data requested by the user.
+Respond with a dictionary with the following keys : 'query'
+Your response should not contain anything else.
+Example 1:
+    User query: What was the last anomaly type that occured at H9B 1T2?
+Response:
+    "query" : "st.session_state.cumm_data_df[(st.session_state.cumm_data_df['postal_code']=='H9B 1T2') & (st.session_state.cumm_data_df['timestamp']==st.session_state.cumm_data_df['timestamp'].max())]"
+
+Example 1:
+    User query: "What areas are affected by Natural Cause starting from 2nd Jan 2024 at 4pm till 3rd Feb 2024 11am?
+Response:
+    "query" : "st.session_state.cumm_data_df[(st.session_state.cumm_data_df['outage_category']=='Natural Cause') & (pd.to_datetime(st.session_state.cumm_data_df['start_time'])>=datetime.datetime(year=2024,month=1, day=2,hour=16)) & (pd.to_datetime(st.session_state.cumm_data_df['start_time'])<=datetime.datetime(year=2024,month=2, day=3,hour=11))]"
 
 ====
 
