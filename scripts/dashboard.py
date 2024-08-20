@@ -835,7 +835,7 @@ def main():
                 authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':paperclip: Assistant'])
+            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':headphones: Assistant'])
 
             #---- SET UP THE PAGE STRUCTURE ---
 
