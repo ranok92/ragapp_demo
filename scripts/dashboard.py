@@ -438,6 +438,7 @@ def get_session_anomaly_chat_history():
         if conv['speaker']=='AI':
             chat_history.append(AIMessage(content=conv['content']))
     return chat_history
+
 def setup_llms():
 
     st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
@@ -487,14 +488,9 @@ def query_chain_anomaly_assistant():
     #run the email chain
 
     query_text = st.session_state.current_input_anomaly
-
-    k = st.session_state.search_k if st.session_state.search_k else 3  
-    retriever = st.session_state.anomaly_soln_vector_db.as_retriever(search_kwargs={"k": k})
-
     #use chains
-
     #check if retrieval is required
-    router_samples = 5
+    router_samples = 3
     router_resp_list = []
     for i in range(router_samples):
 
@@ -533,7 +529,7 @@ def query_chain_anomaly_assistant():
 
         print("The retrieved TABLE :", table_data)
 
-        result = st.session_state.tabular_data_summarizer_chain({'table_data': table_data})
+        result = st.session_state.tabular_data_summarizer_chain.invoke({'table_data': table_data})
         print("REsponse from TABLE :", result)
         if result['text'].strip()[0]!='{':
             result['text'] = '{'+result['text']+'}'
