@@ -40,6 +40,7 @@ from scripts.ragapp import  check_sentence_hallucination, \
                             update_vector_db
 from timeseries_forecasting import *
 from st_aggrid import AgGrid
+from langchain_core.messages import HumanMessage, AIMessage
 
 
 REFRESH_TIMER = 2
@@ -66,7 +67,7 @@ def draw_realtime_map():
     pt_layer_func = JsCode('''(f, latlng) => { 
                                 var rad = f.properties.people_affected/20
                                 var popup_options = {className:'popupclass'}
-                                var popup_msg = '<p> Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected + "</p>"
+                                var popup_msg = '<p> Area code:' + f.properties.postal_code + "<br>" + 'Time :' + f.properties.start_time + "<br>" +  'Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected + "</p>"
                                 return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg, popup_options); }
                            
                            ''')
@@ -77,7 +78,7 @@ def draw_realtime_map():
         remove_missing=True,
         container=container,
         point_to_layer=pt_layer_func,
-        interval=2000
+        interval=1000
     )
     realtime_layer_anomaly.add_to(m)
     st_folium(m, height=500, use_container_width=True)
@@ -428,12 +429,20 @@ def build_anomaly_timeline(plant_name):
     st_timeline(timeline_items)
 
 # ----- CHATBOT ASSISTANT TAB -----
-
+def get_session_anomaly_chat_history():
+    chat_list = st.session_state.messages_anomaly 
+    chat_history = []
+    for conv in chat_list:
+        if conv['speaker']=="user":
+            chat_history.append(HumanMessage(content=conv['content']))
+        if conv['speaker']=='AI':
+            chat_history.append(AIMessage(content=conv['content']))
+    return chat_history
 def setup_llms():
 
     st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
     st.session_state.llm_model_instruct = Ollama(model='llama3.1', system="You are an LLM who is logical and is excellent at following instructions.")
-    st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
+    st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
 
 def setup_llm_chains():
 
@@ -442,14 +451,14 @@ def setup_llm_chains():
     st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
     
     #build the rephrase chain 
-    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=RETRIEVE_REPHRASE_PROMPT)
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=RETRIEVE_REPHRASE_PROMPT)
 
     #build the document chain
     st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, DOCUMENT_CHAIN_PROMPT)
 
     #build the router chain
     router_prompt = PromptTemplate(
-        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_4
+        input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_BASIC
     )
     st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
@@ -474,7 +483,6 @@ def setup_llm_chains():
                                 prompt=tabular_data_summarizer_prompt
                                 )
 
-
 def query_chain_anomaly_assistant():
     #run the email chain
 
@@ -486,7 +494,7 @@ def query_chain_anomaly_assistant():
     #use chains
 
     #check if retrieval is required
-    router_samples = 3
+    router_samples = 5
     router_resp_list = []
     for i in range(router_samples):
 
@@ -497,37 +505,8 @@ def query_chain_anomaly_assistant():
     
     is_qa = statistics.median(router_resp_list)
     print("***  ROUTER RESPONSE : ", router_resp_list)
-    input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
+    input_dict = {'input': query_text, 'chat_history': get_session_anomaly_chat_history()}
     
-    if is_qa.strip().lower()=='qa':
-
-        #rephrase question using history
-        resp = st.session_state.rephrase_chain.invoke(input_dict)
-        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
-        print("**********Rephrased input :", resp_string)
-        #use response to retrieve relevant documents 
-        docs = retriever.get_relevant_documents(resp_string)
-
-        #get answer using relevant documents and question
-        result = st.session_state.document_chain.invoke({'input':resp_string, 
-                                                'context':docs})
-        
-
-        #annotate the response with hallucination information
-        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
-        anno_result = ""
-        for sent, score in zip(resp_sent, scores):
-            if score > 0.3: #0 is no hallu, 1 is hallu
-                sent = f":red-background[{sent}]"
-            anno_result += sent 
-        #result = anno_result
-        print("Scores ***************", scores)
-        print("RESULT ***************", result)
-        print("RESULT ***************", anno_result)
-
-        st.session_state.response = anno_result
-        st.session_state.response_context = docs
-
     if is_qa.strip().lower()=='conv':
         result = st.session_state.conv_chain.invoke(input_dict)
         anno_result = result['answer']
@@ -552,18 +531,14 @@ def query_chain_anomaly_assistant():
         print("PANDA Query : ", db_query)
         table_data = eval(db_query)
 
-        #remove columns that are not necessary
-        total_cols = table_data.columns
-        cols_to_keep = ['name','timestamp']
-        for col in total_cols:
-            if 'anomaly_' in col:
-                cols_to_keep.append(col)
-        table_data = table_data[cols_to_keep]
         print("The retrieved TABLE :", table_data)
 
         result = st.session_state.tabular_data_summarizer_chain({'table_data': table_data})
         print("REsponse from TABLE :", result)
-        anno_result = parse_response(result)
+        if result['text'].strip()[0]!='{':
+            result['text'] = '{'+result['text']+'}'
+        result_json_data = json.loads(result['text'])
+        anno_result = result_json_data['summary']+result_json_data['thoughts']
         #st.session_state.response = parse_response(result)
         st.session_state.response_context = ""  
  
@@ -682,7 +657,7 @@ def build_doc_assistant_tab():
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data() -> pd.DataFrame:
-    st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url, index_col=[0])
+    st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url,  index_col=False)
 
     t = st.session_state.cur_data_df['timestamp'].iloc[0]
 
