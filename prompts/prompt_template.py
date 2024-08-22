@@ -40,6 +40,18 @@ ROUTER_PROMPT_TEMPLATE_4 = "Given an input, decide whether responding to it woul
                     Explain your answer.\n \
                     Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'outage', 'conv', 'qa' or 'writing'."
 
+ROUTER_PROMPT_TEMPLATE_BASIC = "Given an input, decide whether responding to it would require fact based question answering capabilitesl, a part of a general conversation, \
+                    need to consult an electrical grid outage monitoring table or require assistance with creative writing. \
+                    Always check for compatibility in the outage category first. If you do not find a match, check for the rest. \n \
+                    The outage monitoring table contains information regarding affected areas, \
+                    the postal codes, outage duration, people affected,  start and end times of the outages. \
+                    \n Here is the input \n\n {input}.\n\n Repond with one word: 'outage', 'conv', or 'writing'. \
+                    'outage' if you think it would need to access the outage monitoring table, \
+                    'conv', if you think it is a part of a regular conversation, \
+                    'writing' if you understand that the input is requesting help with creative writing. \n \
+                    Explain your answer.\n \
+                    Respond with a json with two keys. 'response' and 'explaination'. 'response' should either be 'outage', 'conv', or 'writing'."
+
 
 CONV_PROMPT_TEMPLATE = "You are a helpful bot who can hold a polite conversation with a fellow human. \
                         You will be provided with a history of messages. Based on that you need to form a final \
@@ -55,7 +67,6 @@ RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provide
          Human's question: {input}"
 
 
-PRED_ASSISTANT_PROMPT_TEMPLATE = "Answer the user's query absed"
 
 TABLE_SUMMARIZER_TEMPLATE = '''
 You are a bot who specializes on reading tabular data and summarizing the contents. \n
@@ -95,8 +106,8 @@ You are a bot who specializes on reading tabular data and summarizing the conten
 The table data you will read holds data related to outages occured in a power grid system. \n
 Summarize the contents of the rows emphasizing on 'people_affected', 'outage_category' and their respective 'start_time'. \n  
 
-\n\n Just provide your thoughts. No need to ask for feedback. Always respond in third person.\n
-Respond ONLY with a dictionary with two keys: 'summary' and 'thoughts'.
+Just provide your thoughts. No need to ask for feedback. Always respond in third person.\n
+
 ====
 Example 1:
 
@@ -125,6 +136,7 @@ Example 1:
                                 response team, capable of restoring power swiftly—an encouraging sign for future incidents."    
 
 ====
+Respond ONLY with a valid JSON with two keys : 'summary' and 'thoughts'. No extra words. 
 
 Here is the current table information:
 Table data:
@@ -134,6 +146,14 @@ Response:
 
 '''
 
+PRED_ASSISTANT_PROMPT_TEMPLATE = '''
+You are a bot who is an expert at timeseries forecasting using Neural networks. The user would provide their requirements and \
+you will have to respond with helpful suggestions to their questions.
+
+Past conversation : {history}
+Current User input: {input}
+
+'''
 
 NL_TO_PANDAS_QUERY_TEMPLATE = '''
 You are a bot who specializes on converting nautral language to Pandas retrieval query.
@@ -176,7 +196,7 @@ You are a bot who specializes on converting nautral language to Pandas retrieval
 Pandas is a python library for database management.
 You are provided with a table schema with column names and their types. 
 ================
-Table variable name: st.session_state.cumm_data_df
+Table variable name: st.session_state.cur_data_df
 Table schema: 
     postal_code         object
     timestamp            int64
@@ -194,12 +214,12 @@ Your response should not contain anything else.
 Example 1:
     User query: What was the last anomaly type that occured at H9B 1T2?
 Response:
-    "query" : "st.session_state.cumm_data_df[(st.session_state.cumm_data_df['postal_code']=='H9B 1T2') & (st.session_state.cumm_data_df['timestamp']==st.session_state.cumm_data_df['timestamp'].max())]"
+    "query" : "st.session_state.cur_data_df[(st.session_state.cur_data_df['postal_code']=='H9B 1T2') & (st.session_state.cur_data_df['timestamp']==st.session_state.cur_data_df['timestamp'].max())]"
 
 Example 1:
     User query: "What areas are affected by Natural Cause starting from 2nd Jan 2024 at 4pm till 3rd Feb 2024 11am?
 Response:
-    "query" : "st.session_state.cumm_data_df[(st.session_state.cumm_data_df['outage_category']=='Natural Cause') & (pd.to_datetime(st.session_state.cumm_data_df['start_time'])>=datetime.datetime(year=2024,month=1, day=2,hour=16)) & (pd.to_datetime(st.session_state.cumm_data_df['start_time'])<=datetime.datetime(year=2024,month=2, day=3,hour=11))]"
+    "query" : "st.session_state.cur_data_df[(st.session_state.cur_data_df['outage_category']=='Natural Cause') & (pd.to_datetime(st.session_state.cur_data_df['start_time'])>=datetime.datetime(year=2024,month=1, day=2,hour=16)) & (pd.to_datetime(st.session_state.cur_data_df['start_time'])<=datetime.datetime(year=2024,month=2, day=3,hour=11))]"
 
 ====
 
