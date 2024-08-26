@@ -11,9 +11,153 @@ import altair as alt
 from prompts.prompt_template import *
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
+from utils.timeseries_forecasting_utils import *
+from langchain_core.messages import HumanMessage, AIMessage
+
+FORECASTING_FEATURES = [
+    # Meteorological Data
+    "solar_irradiance",           # Solar energy received per unit area (W/m²)
+    "temperature",                # Ambient and module temperature
+    "cloud_cover",                # Cloud presence and density
+    "wind_speed",                 # Wind speed
+    "humidity",                   # Atmospheric humidity
+    "precipitation",              # Rain or snow affecting solar panels
+
+    # Temporal Features
+    "time_of_day",                # Hour of the day
+    "day_of_year",                # Seasonal variations (day of the year or month)
+    "day_of_week",                # Day of the week
+    "historical_power_output",    # Previous power generation data
+
+    # Geographical and Location-Based Features
+    "latitude",                   # Latitude of the solar farm
+    "longitude",                  # Longitude of the solar farm
+    "altitude",                   # Altitude of the solar farm
+    "panel_orientation",          # Orientation of the solar panels
+    "panel_tilt",                 # Tilt angle of the solar panels
+    "shading_obstacles",          # Nearby obstacles causing shading
+
+    # Operational Features
+    "panel_type",                 # Type of solar panels (e.g., monocrystalline, polycrystalline)
+    "panel_age",                  # Age of the solar panels
+    "inverter_efficiency",        # Efficiency of inverters
+    "maintenance_records",        # Maintenance and cleaning records
+    "battery_storage_levels",     # Current levels and usage patterns of battery storage
+
+    # External Influences
+    "grid_demand",                # Grid demand impacting solar farm operations
+    "curtailment",                # Curtailment orders
+
+    # Derived and Engineered Features
+    "clear_sky_solar_irradiance", # Estimated maximum irradiance under clear sky
+    "lagged_features",            # Previous time steps' values for temporal dependencies
+    "moving_averages",            # Moving averages or rolling windows
+
+    # Environmental Data
+    "aerosol_levels",             # Dust, pollution, and other aerosols in the atmosphere
+    "albedo"                      # Reflectivity of the surrounding surface
+]
+
+FORECASTING_MODELS = [
+    # Recurrent Neural Networks (RNNs)
+    "Basic RNNs",                  # Good for handling sequential data with short-term dependencies
+    
+    # Long Short-Term Memory Networks (LSTMs)
+    "LSTMs",                       # Excellent for capturing long-term dependencies in time series
+    
+    # Gated Recurrent Units (GRUs)
+    "GRUs",                        # Similar to LSTMs but with a simpler architecture and faster training
+    
+    # Convolutional Neural Networks (CNNs)
+    "CNNs for Time Series",        # Effective for detecting local patterns, often combined with RNNs or LSTMs
+    
+    # Temporal Convolutional Networks (TCNs)
+    "TCNs",                        # Designed specifically for sequential data, capturing long-range dependencies
+    
+    # Transformer Models
+    "Transformers",                # Uses self-attention mechanisms to capture long-range dependencies
+    
+    # Hybrid Models
+    "CNN-LSTM",                    # Combines CNNs and LSTMs for feature extraction and sequential modeling
+    "Seq2Seq (Sequence to Sequence)", # Maps an input sequence to an output sequence, suitable for multi-step forecasting
+    "Attention Mechanisms",        # Added to RNNs or LSTMs to focus on specific parts of the sequence
+    
+    # Feedforward Neural Networks (FFNNs)
+    "FFNNs with Feature Engineering", # Uses engineered features from the time series for basic forecasting tasks
+    
+    # DeepAR (Amazon)
+    "DeepAR",                      # Combines autoregressive models with deep learning for probabilistic forecasting
+    
+    # N-BEATS
+    "N-BEATS (Neural Basis Expansion Analysis Time Series)" # Deep learning model for time series forecasting
+]
+
+FORECASTING_OPTIMIZERS = [
+    # Gradient Descent-based Optimizers
+    "SGD",                        # Stochastic Gradient Descent - Basic optimizer with optional momentum.
+    "SGD with Momentum",           # SGD enhanced with momentum to accelerate convergence.
+    
+    # Adaptive Learning Rate Optimizers
+    "Adam",                       # Adaptive Moment Estimation - Combines the benefits of AdaGrad and RMSprop.
+    "RMSprop",                    # Root Mean Square Propagation - Adjusts the learning rate based on recent gradients.
+    "Adagrad",                    # Adaptive Gradient Algorithm - Adapts learning rates based on individual parameters.
+    "Adadelta",                   # Extension of Adagrad that seeks to address its learning rate decay issues.
+    "AdamW",                      # Adam with Weight Decay - Like Adam, but includes decoupled weight decay for better regularization.
+    "Nadam",                      # Nesterov-accelerated Adaptive Moment Estimation - Adam combined with Nesterov momentum.
+    "AdaMax",                     # A variant of Adam based on the infinity norm.
+    
+    # Second-Order Methods
+    "L-BFGS",                     # Limited-memory Broyden–Fletcher–Goldfarb–Shanno - A quasi-Newton method that approximates the second-order derivative (Hessian).
+    
+    # Other Optimizers
+    "FTRL",                       # Follow-the-Regularized-Leader - Used in large-scale linear models.
+    "Yogi",                       # An optimizer like Adam, but more robust to noisy gradients and less sensitive to hyperparameter settings.
+    "Rprop",                      # Resilient Backpropagation - Adjusts the step size for each weight independently.
+    "AMSGrad",                    # A variant of Adam that seeks to improve convergence by enforcing a non-increasing step size.
+    "SWATS",                      # Switches from Adam to SGD when necessary to potentially improve generalization.
+]
+
+FORECASTING_LOSS_FUNCTIONS = [
+    # Regression Loss Functions
+    "Mean Squared Error (MSE)",             # Penalizes the square of the difference between predicted and actual values, sensitive to outliers.
+    "Mean Absolute Error (MAE)",            # Penalizes the absolute difference between predicted and actual values, more robust to outliers.
+    "Huber Loss",                           # Combines MSE and MAE, less sensitive to outliers than MSE, but differentiable everywhere.
+    "Mean Absolute Percentage Error (MAPE)",# Expresses the error as a percentage of the actual values, useful for interpretability.
+    "Root Mean Squared Error (RMSE)",       # The square root of MSE, provides error in the same units as the output.
+    "Quantile Loss",                        # Used in quantile regression to predict a specific quantile, useful for uncertainty estimation.
+    "Log-Cosh Loss",                        # The logarithm of the hyperbolic cosine of the prediction error, smooths out large differences.
+    
+    # Distribution-based Loss Functions
+    "Negative Log Likelihood",              # Measures the likelihood of the observed data under the predicted probability distribution.
+    "Pinball Loss",                         # A variation of Quantile Loss, used for interval predictions.
+
+    # Custom Loss Functions
+    "Asymmetric Loss",                      # Custom loss where overestimations and underestimations are penalized differently.
+    "Smoothed L1 Loss",                     # A variation of Huber Loss, smooths transitions between L1 and L2 loss behaviors.
+
+    # Specific to Forecasting
+    "Symmetric Mean Absolute Percentage Error (sMAPE)", # A variant of MAPE that treats over- and under-forecasts symmetrically.
+    "Mean Squared Logarithmic Error (MSLE)", # Penalizes the square of the logarithmic difference between predicted and actual values, reduces impact of large errors.
+
+    # Probabilistic Loss Functions
+    "Gaussian Negative Log-Likelihood",     # Assumes the data follows a Gaussian distribution and calculates the negative log-likelihood.
+    "Poisson Loss",                         # Suitable for count data, assumes the data follows a Poisson distribution.
+    "CRPS (Continuous Ranked Probability Score)", # Measures the accuracy of probabilistic forecasts.
+]
+
 
 def get_data_forecast():
     return pd.read_csv(st.session_state.forecast_dataset_url)
+
+def get_session_forecast_chat_history():
+    chat_list = st.session_state.messages_forecast 
+    chat_history = []
+    for conv in chat_list:
+        if conv['speaker']=="user":
+            chat_history.append(HumanMessage(content=conv['content']))
+        if conv['speaker']=='AI':
+            chat_history.append(AIMessage(content=conv['content']))
+    return chat_history
 
 
 def setup_llms_forecast():
@@ -27,9 +171,17 @@ def setup_llm_chains_forecast():
     st.session_state.assistant_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant, prompt=pred_assistant_prompt, output_key='answer')
     
 def query_chain_forecast():
+    form_info = None
+    if 'timeseries_form_info' in st.session_state.keys():
+        form_info = st.session_state.timeseries_form_info
+    
     input_query = st.session_state.current_forecast_input
     st.session_state.messages_forecast.append({"speaker" : "user", "content": input_query})
-    resp = st.session_state.assistant_chain.invoke({'input':input_query})
+    resp = st.session_state.assistant_chain.invoke({'input':input_query, 
+                                                    'history': get_session_forecast_chat_history(),
+                                                    'user_param_choices' : form_info})
+    
+    print("RESP : ", resp)
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
@@ -55,29 +207,39 @@ def build_chat_window_forecast_assistant():
 
 
 def build_param_selection_form():
-    st.markdown(f'<h3 style="color:black ;text-align:center">Param Selection</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h3 style="color:black ;text-align:center">Model Definition </h2>', unsafe_allow_html=True)
     param_select_form = st.form('Select params', border=False)
     with param_select_form:
         #form_col1, form_col2 = st.columns(2)
         
         features_selected = st.multiselect("Features to include", 
-                                        ['Feature1', 'Feature2', 'Feature3', 'Feature4'],
-                                        'Feature1')
+                                        FORECASTING_FEATURES,
+                                        )
         model_selected = st.selectbox("Pick a model", 
-                                    ['Model 1', 'Model 2', 'Model 3'])
+                                    FORECASTING_MODELS)
             
         add_normalization = st.toggle('Add normalization')
         add_dropout = st.toggle('Add dropout')
 
-        forecasting_horizon = st.selectbox("Pick a prediction horizon", 
-                                            ['1 hr', '1 day', '1 week', '1 month'])
-        
+        loss_func_selected = st.selectbox("Pick a loss function", 
+                                            FORECASTING_LOSS_FUNCTIONS)
+        optimizer_selected = st.selectbox("Pick an optimizer", 
+                                        FORECASTING_OPTIMIZERS)
         training_epochs = st.text_input('Training Epochs', 1000)
         learning_rate = st.text_input("Learning rate", 0.001)
-        select_optimizer = st.selectbox("Pick an optimizer", 
-                                        ['Opt1', 'Opt2', 'Opt3'])
+     
     
-        retrieve_data = st.form_submit_button("Set Params")
+        get_form_data = st.form_submit_button("Set Params")
+        if get_form_data:
+            st.session_state.timeseries_form_info = {}
+            st.session_state.timeseries_form_info['features_selected'] = features_selected
+            st.session_state.timeseries_form_info['model_selected'] = model_selected
+            st.session_state.timeseries_form_info['normalization'] = add_normalization
+            st.session_state.timeseries_form_info['dropout'] = add_dropout
+            st.session_state.timeseries_form_info['loss_func_selected'] = loss_func_selected 
+            st.session_state.timeseries_form_info['optimizer_selected'] = optimizer_selected 
+            st.session_state.timeseries_form_info['learning_rate_selected'] = learning_rate
+
    
 def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
