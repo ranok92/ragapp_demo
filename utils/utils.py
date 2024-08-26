@@ -3,9 +3,13 @@ import ipdb
 import pandas_geojson as pdg
 
 def get_key_val_from_llm_json_string(dict_text, key):
-    dict_text_p1 = dict_text.split('{')[1].split('}')[0]
-    dict_text_wh = '{'+dict_text_p1+'}'
-    print("DICT :::::: ", dict_text_wh)
-    return json.loads(dict_text_wh)[key]
+    dict_json = str_to_dict(dict_text)
+    return dict_json[key]
 
 
+def str_to_dict(str_data):
+    if str_data.strip()[0]!='{':
+        str_data = '{'+ str_data
+    if str_data.strip()[-1]!='}':
+        str_data = str_data +'}'
+    return json.loads(str_data)
