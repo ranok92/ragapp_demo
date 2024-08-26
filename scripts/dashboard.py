@@ -1,5 +1,6 @@
 import time  # to simulate a real time data, time loop
 from pathlib import Path
+import os 
 
 import numpy as np  # np mean, np random
 import pandas as pd  # read csv, df manipulation
@@ -41,7 +42,12 @@ from scripts.ragapp import  check_sentence_hallucination, \
 from timeseries_forecasting import *
 from st_aggrid import AgGrid
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain_openai import ChatOpenAI
 
+
+with open('../assets/openai_api_key.txt', 'r') as f:
+    key = f.read()
+os.environ["OPENAI_API_KEY"]=key
 
 REFRESH_TIMER = 2
 # ---- SET UP THE LLMS ----
@@ -67,7 +73,7 @@ def draw_realtime_map():
     pt_layer_func = JsCode('''(f, latlng) => { 
                                 var rad = f.properties.people_affected/20
                                 var popup_options = {className:'popupclass'}
-                                var popup_msg = '<p> Area code:' + f.properties.postal_code + "<br>" + 'Time :' + f.properties.start_time + "<br>" +  'Reason :' + f.properties.outage_category + "<br>" + 'People affected :' + f.properties.people_affected + "</p>"
+                                var popup_msg = '<p> Area code:' + f.properties.postal_code + "<br>" + 'Time :' + f.properties.start_time + "<br>" +  'Reason :' + f.properties.outage_reason + "<br>" + 'People affected :' + f.properties.people_affected + "</p>"
                                 return L.circleMarker(latlng, {radius: 10, fillOpacity: 0.4, color: '#cf1313', fillColor: '#cf1313', interactive: true}).bindPopup(popup_msg, popup_options); }
                            
                            ''')
@@ -118,9 +124,9 @@ def plot_outage_occurance_linechart():
 
     part_data_df = st.session_state.cumm_data_df
  
-    part_data = part_data_df.groupby(['datetime', 'outage_category']).agg(counts=('outage_category', 'count')).reset_index()
+    part_data = part_data_df.groupby(['datetime', 'outage_reason']).agg(counts=('outage_reason', 'count')).reset_index()
     
-    part_data.rename(columns={'outage_category':'Outage Category'}, inplace=True)
+    part_data.rename(columns={'outage_reason':'Outage Category'}, inplace=True)
     part_data_df_long = part_data.melt(ignore_index=False, var_name='Anomaly Type')
     part_data_long_w_index = part_data_df_long.reset_index()
     ano_chart = alt.Chart(part_data).mark_area(opacity=0.5).encode(
@@ -209,18 +215,18 @@ def write_outages():
     row1 = st.container()
     row2 = st.container()
     row3 = st.container()
-    outage_counts_df = st.session_state.cumm_data_df.groupby('outage_category').agg(outage_counts=('outage_category', 'count')).reset_index()
+    outage_counts_df = st.session_state.cumm_data_df.groupby('outage_reason').agg(outage_counts=('outage_reason', 'count')).reset_index()
     with row1:
         ano_col1, ano_col2  = st.columns(2)
         with ano_col1:
             st.html(f'<span class="anomaly_counter"></span>')
 
-            env_factors = outage_counts_df[outage_counts_df['outage_category']=='Environmental Factors']['outage_counts'].iloc[0]
+            env_factors = outage_counts_df[outage_counts_df['outage_reason']=='Environmental Factors']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Env. Factors</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {env_factors} </h6>", unsafe_allow_html=True)
         with ano_col2:
             st.html(f'<span class="anomaly_counter"></span>')
-            eqp_fail = outage_counts_df[outage_counts_df['outage_category']=='Equipment Failure']['outage_counts'].iloc[0]
+            eqp_fail = outage_counts_df[outage_counts_df['outage_reason']=='Equipment Failure']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Equipment Failure</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {eqp_fail} </h6>", unsafe_allow_html=True)
     with row2:
@@ -229,13 +235,13 @@ def write_outages():
         with ano_col3:
             st.html(f'<span class="anomaly_counter"></span>')
 
-            ext_factors = outage_counts_df[outage_counts_df['outage_category']=='External Factors']['outage_counts'].iloc[0]
+            ext_factors = outage_counts_df[outage_counts_df['outage_reason']=='External Factors']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Ext. Factors</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {ext_factors} </h6>", unsafe_allow_html=True)
         with ano_col4:
             st.html(f'<span class="anomaly_counter"></span>')
 
-            nat_cause = outage_counts_df[outage_counts_df['outage_category']=='Natural Cause']['outage_counts'].iloc[0]
+            nat_cause = outage_counts_df[outage_counts_df['outage_reason']=='Natural Cause']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Nat. Causes</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {nat_cause} </h6>", unsafe_allow_html=True)
 
@@ -244,13 +250,13 @@ def write_outages():
         with ano_col5:
             st.html(f'<span class="anomaly_counter"></span>')
 
-            sys_repair = outage_counts_df[outage_counts_df['outage_category']=='Power System Repair']['outage_counts'].iloc[0]
+            sys_repair = outage_counts_df[outage_counts_df['outage_reason']=='Power System Repair']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Repair</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {sys_repair} </h6>", unsafe_allow_html=True)
         with ano_col6:
 
             st.html(f'<span class="anomaly_counter"></span>')
-            sys_improvement = outage_counts_df[outage_counts_df['outage_category']=='System Improvement']['outage_counts'].iloc[0]
+            sys_improvement = outage_counts_df[outage_counts_df['outage_reason']=='System Improvement']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Improvement</h5>", unsafe_allow_html=True)
             st.write(f"<h6> {sys_improvement} </h6>", unsafe_allow_html=True)
 
@@ -442,8 +448,19 @@ def get_session_anomaly_chat_history():
 def setup_llms():
 
     st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = Ollama(model='llama3.1', system="You are an LLM who is logical and is excellent at following instructions.")
-    st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
+
+    #OPENAI
+    st.session_state.llm_dashboard_assistant = ChatOpenAI(
+                                                model="gpt-4o-mini" ,
+                                                temperature=0,
+                                                max_retries=2,
+                                                # api_key="...",
+                                                # base_url="...",
+                                                # organization="...",
+                                                # other params...
+                                            )
 
 def setup_llm_chains():
 
@@ -476,7 +493,7 @@ def setup_llm_chains():
     
     #build the table data analyzer chain
     tabular_data_summarizer_prompt = PromptTemplate(
-        input_variables=['table_data'], template=TABLE_SUMMARIZER_TEMPLATE_OUTAGE
+        input_variables=['input', 'info_from_db'], template=TABLE_SUMMARIZER_TEMPLATE_OUTAGE
     )
     
     st.session_state.tabular_data_summarizer_chain = LLMChain(
@@ -496,7 +513,6 @@ def query_chain_anomaly_assistant():
 
         router_resp = st.session_state.router_chain.invoke({'input': query_text})
         print("***RESPONSE QA : ", router_resp['answer'])
-
         router_resp_list.append(get_key_val_from_llm_json_string(router_resp['answer'], 'response'))
     
     is_qa = statistics.median(router_resp_list)
@@ -515,7 +531,8 @@ def query_chain_anomaly_assistant():
         print("**********Rephrased input :", resp_string)
         result = st.session_state.email_chain.invoke({'input':resp_string})
         anno_result = result['answer']
-        st.session_state.response = result
+        
+        st.session_state.response = anno_result
         st.session_state.response_context = ""  
 
     if is_qa.strip().lower()=='outage':
@@ -526,15 +543,14 @@ def query_chain_anomaly_assistant():
         db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
         print("PANDA Query : ", db_query)
         table_data = eval(db_query)
-
         print("The retrieved TABLE :", table_data)
-
-        result = st.session_state.tabular_data_summarizer_chain.invoke({'table_data': table_data})
+        result = st.session_state.tabular_data_summarizer_chain.invoke({'input': query_text, 'info_from_db': table_data})
         print("REsponse from TABLE :", result)
-        if result['text'].strip()[0]!='{':
-            result['text'] = '{'+result['text']+'}'
-        result_json_data = json.loads(result['text'])
-        anno_result = result_json_data['summary']+result_json_data['thoughts']
+        # if result['text'].strip()[0]!='{':
+        #     result['text'] = '{'+result['text']+'}'
+        # result_json_data = json.loads(result['text'])
+        # anno_result = result_json_data['summary']+result_json_data['thoughts']
+        anno_result = result['text']
         #st.session_state.response = parse_response(result)
         st.session_state.response_context = ""  
  
@@ -832,7 +848,7 @@ def main():
                     map_col, chat_col = st.columns([0.7, 0.3])
 
                     with map_col:
-                        st.markdown("<h2 style='text-align: center; color: #453030;'> Interactive Map </h2>", unsafe_allow_html=True)
+                        st.markdown(f"<h2 style='text-align: center; color: #453030;'> Outage Tracker </h2> <p style='text-align: right'> Last Updated : {st.session_state.cur_data_df['datetime'][0]} ", unsafe_allow_html=True)
 
                         draw_realtime_map()
                     with chat_col:
