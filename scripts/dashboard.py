@@ -50,15 +50,7 @@ with open('../assets/openai_api_key.txt', 'r') as f:
 os.environ["OPENAI_API_KEY"]=key
 
 REFRESH_TIMER = 2
-# ---- SET UP THE LLMS ----
 # ---- FUNCTIONS FOR GRID OVERVIEW TAB ------
-# ---- Draw realtime map ----- 
-
-
-
-
-# ----- Writing the summarization columns -----
-
 # ----- CHATBOT ASSISTANT TAB -----
 def get_session_anomaly_chat_history():
     chat_list = st.session_state.messages_anomaly 
@@ -304,28 +296,6 @@ def build_doc_assistant_tab():
         with search_db_col:
             build_chat_window_assistant()
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
-def get_data() -> pd.DataFrame:
-    st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url,  index_col=False)
-
-    t = st.session_state.cur_data_df['timestamp'].iloc[0]
-
-    if 'timestamps' not in st.session_state.keys():
-        st.session_state.timestamps = []
-    
-    if t not in st.session_state.timestamps:
-        st.session_state.timestamps.append(t)
-        if 'cumm_data_df' not in st.session_state.keys():
-            st.session_state.cumm_data_df = st.session_state.cur_data_df
-        else:
-            st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df], ignore_index=True)
-
-    print("UNIQUE TIMESTAMPS :", st.session_state.cumm_data_df['timestamp'].unique())
-
-def get_data_full():
-    st.session_state.full_data_df = pd.read_csv(st.session_state.dataset_url)
-
-#---SET BACKGROUND --- 
 
 #---- Build solar forecast tab
 
