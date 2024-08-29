@@ -773,7 +773,7 @@ def main():
         page_icon="✅",
         layout="wide",
     )
-    st.html("../dashboard_styles.html")
+    st.html("../css/dashboard_styles.html")
     #st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
