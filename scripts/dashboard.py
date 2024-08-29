@@ -466,13 +466,18 @@ def setup_llm_chains():
 
     #build the conversation chain
     conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
-    st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
+    st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, 
+                                           prompt=conv_prompt, 
+                                           output_key='answer')
     
     #build the rephrase chain 
-    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=RETRIEVE_REPHRASE_PROMPT)
+    rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT)
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_dashboard_assistant, 
+                                               prompt=rephrase_prompt)
 
     #build the document chain
-    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, DOCUMENT_CHAIN_PROMPT)
+    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat,
+                                                                  DOCUMENT_CHAIN_PROMPT)
 
     #build the router chain
     router_prompt = PromptTemplate(
@@ -505,30 +510,36 @@ def query_chain_anomaly_assistant():
     #run the email chain
 
     query_text = st.session_state.current_input_anomaly
+    chat_history = get_session_anomaly_chat_history()
     #use chains
+    #rephrase using historic context
+    resp = st.session_state.rephrase_chain.invoke({'input': query_text, 'chat_history': chat_history})
+    print("**********Rephrased input whole:", resp)
+
+    resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+    print("**********Rephrased input :", resp_string)
+
+
     #check if retrieval is required
     router_samples = 3
     router_resp_list = []
     for i in range(router_samples):
 
-        router_resp = st.session_state.router_chain.invoke({'input': query_text})
+        router_resp = st.session_state.router_chain.invoke({'input': resp_string})
         print("***RESPONSE QA : ", router_resp['answer'])
         router_resp_list.append(get_key_val_from_llm_json_string(router_resp['answer'], 'response'))
     
     is_qa = statistics.median(router_resp_list)
     print("***  ROUTER RESPONSE : ", router_resp_list)
-    input_dict = {'input': query_text, 'chat_history': get_session_anomaly_chat_history()}
     
     if is_qa.strip().lower()=='conv':
-        result = st.session_state.conv_chain.invoke(input_dict)
+        result = st.session_state.conv_chain.invoke({'input': resp_string, 
+                                                     'chat_history': get_session_anomaly_chat_history()})
         anno_result = result['answer']
         st.session_state.response = result
         st.session_state.response_context = ""    
     
     if is_qa.strip().lower()=='writing':
-        resp = st.session_state.rephrase_chain.invoke(input_dict)
-        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
-        print("**********Rephrased input :", resp_string)
         result = st.session_state.email_chain.invoke({'input':resp_string})
         anno_result = result['answer']
         
@@ -538,13 +549,14 @@ def query_chain_anomaly_assistant():
     if is_qa.strip().lower()=='outage':
 
         #do stuff
-        resp = st.session_state.pandas_query_chain.invoke({'input': query_text})
+        resp = st.session_state.pandas_query_chain.invoke({'input': resp_string})
         print("RESP: ", resp)
         db_query = get_key_val_from_llm_json_string(resp['text'], 'query')
         print("PANDA Query : ", db_query)
         table_data = eval(db_query)
         print("The retrieved TABLE :", table_data)
-        result = st.session_state.tabular_data_summarizer_chain.invoke({'input': query_text, 'info_from_db': table_data})
+        result = st.session_state.tabular_data_summarizer_chain.invoke({'input': resp_string, 
+                                                                        'info_from_db': table_data})
         print("REsponse from TABLE :", result)
         # if result['text'].strip()[0]!='{':
         #     result['text'] = '{'+result['text']+'}'
@@ -838,8 +850,8 @@ def main():
                                             border-radius: 10px;
                                         }
                                         ''')
-                map_and_chat_container = st.container(height=640, border=False)
-                grid_overview_container = st.container(height=530, border=False)
+                map_and_chat_container = st.container(height=700, border=False)
+                grid_overview_container = st.container(height=550, border=False)
                 
                 with header_container:
                     st.markdown("<h2 style='font-family: sans-serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
