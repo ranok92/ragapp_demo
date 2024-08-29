@@ -12,14 +12,6 @@ def get_weekly_data(full_data, kpi_str, t):
     df_alt_line['timestamp'] = np.arange(0, t-week*7+1)
     return df_alt_line
 
-def parse_response(response):
-    resp_text = response['text']
-    summary_thoughts = resp_text.split("'summary'")[1].strip(" ':,.}{ ")
-    summary = summary_thoughts.split("'thoughts'")[0].strip(" ':,. }{ ")
-
-    thoughts = summary_thoughts.split("'thoughts'")[1].strip(" ':,. }{ ")
-    resp_string = f'{summary}. {thoughts}'
-    return resp_string
 
 def get_geojson_from_df(regular_df, t):
     '''
@@ -48,15 +40,6 @@ def get_geojson_from_df(regular_df, t):
     print(len(regular_df), t)
     return geo_json
 
-
-page_bg_img = """
-<style>
-[data-testid="stAppViewContainer"] {
-background-color: rgb(233,125,139);
-background-image: linear-gradient(167deg, rgba(233,125,139,1) 0%, rgba(255,255,255,1) 20%)
-}
-</style>
-"""
 
 icon_create_function = '''
             function(cluster) {
