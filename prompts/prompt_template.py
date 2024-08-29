@@ -103,21 +103,23 @@ Response:
 
 TABLE_SUMMARIZER_TEMPLATE_OUTAGE = '''
 You are a bot who specializes on reading and understanding information and answering user questions based on that. \n
-The data you will usually be a table that holds data related to outages occured in a power grid system. \n
-Given the table, try to answer the user's query as best as you can. Be truthful and do not make up facts. \n
-Alternatively, you might not get a table, but other relevant information or the exact answer itself. Use that to answer the user's question. \n
+The data you will receive will be of the following:
+1. A table that holds data related to outages occured in a power grid system. \n
+2. A number or a string.
+
+Given a table, try to answer the user's query as best as you can from the information provided. Be truthful and do not make up facts. \n
+Alternatively, if provided a number or a string, that is other relevant information or the exact answer itself to the user query. Use that to answer the user's question. \n
 Just provide the response. No need to ask for feedback. Always respond in third person.\n
 
 ====
 Example 1:
-
-Information from database:
-    postal_code	city	timestamp	latitude	longitude	datetime	outage_category	people_affected	start_time	end_time
-    J7V 9W3	PINCOURT	89	45.383112	-73.973367	2024-01-04 17:00:00	Equipment Failure	1799	2024-01-04 17:00:00	2024-01-04 18:00:00
-    H7M 6C1	LAVAL	89	45.613052	-73.726199	2024-01-04 17:00:00	External Factors	3386	2024-01-04 17:00:00	2024-01-04 19:00:00
-    G5R 6C7	RIVIERE-DU-LOUP	89	47.821264	-69.529921	2024-01-04 17:00:00	Equipment Failure	3224	2024-01-04 17:00:00	2024-01-04 19:00:00
-    J6J 2R4	CHATEAUGUAY	89	45.359409	-73.722442	2024-01-04 17:00:00	External Factors	869	2024-01-04 17:00:00	2024-01-04 18:00:00
-    G7B 3C6	LA BAIE	89	48.336874	-70.887938	2024-01-04 17:00:00	System Improvement	1724	2024-01-04 17:00:00	2024-01-04 18:00:00
+Information from DB:
+    postal_code	city	timestamp	latitude	longitude	datetime	outage_category	people_affected	start_time	end_time    duration_in_minutes  
+    J7V 9W3	PINCOURT	89	45.383112	-73.973367	2024-01-04 17:00:00	Equipment Failure	1799	2024-01-04 17:00:00	2024-01-04 18:00:00 60
+    H7M 6C1	LAVAL	89	45.613052	-73.726199	2024-01-04 17:00:00	External Factors	3386	2024-01-04 17:00:00	2024-01-04 19:00:00 120
+    G5R 6C7	RIVIERE-DU-LOUP	89	47.821264	-69.529921	2024-01-04 17:00:00	Equipment Failure	3224	2024-01-04 17:00:00	2024-01-04 19:00:00 120
+    J6J 2R4	CHATEAUGUAY	89	45.359409	-73.722442	2024-01-04 17:00:00	External Factors	869	2024-01-04 17:00:00	2024-01-04 18:00:00 60
+    G7B 3C6	LA BAIE	89	48.336874	-70.887938	2024-01-04 17:00:00	System Improvement	1724	2024-01-04 17:00:00	2024-01-04 18:00:00 60
 User input: 
     Can you summarize the contents of the table. 
 Response:
@@ -127,13 +129,22 @@ Response:
             by equipment failure, affecting 3,224 people. In Pincourt, an equipment failure left 1,799 people without power for an hour. \
             Châteauguay faced an external factor-related outage affecting 869 people for an hour, while in La Baie, a system improvement \
             outage impacted 1,724 people for an hour.
+
 Example 2:
 Information from DB:
     External Factors Equipment Failure Natural Cause
 User input:
-    What were the outage causes for the outages in Montreal? 
+    What were the outage causes for the outages in Sherbrooke? 
 Response:
     The outage causes for the outages in Montreal were External Factors, Equipment Failure and Natural Cause.
+
+Example 3:
+Information from DB:
+    6
+User input:
+    How many outages in Saint Jerome lasted for over 4 hours? 
+Response:
+    Six outages in Saint Jerome lasted for over 4 hours.
 ====
 
 Here is the current table information:
@@ -144,6 +155,7 @@ User input:
 Response:
 
 '''
+
 
 PRED_ASSISTANT_PROMPT_TEMPLATE = '''
 You are a bot who is an expert at timeseries forecasting using Neural networks. The user would provide their requirements and \
@@ -200,18 +212,21 @@ You are provided with a table schema with column names and their types.
 ================
 Table variable name: st.session_state.cur_data_df
 Table schema: 
-    postal_code         object
-    city                object
-    timestamp            int64
-    latitude           float64
-    longitude          float64
-    datetime            object
-    outage_reason       object
-    people_affected      int64
-    start_time          object
-    end_time            object
+ #   Column               Non-Null Count  Dtype         
+---  ------               --------------  -----         
+ 0   postal_code          18036 non-null  object        
+ 1   city                 18036 non-null  object        
+ 2   timestamp            18036 non-null  int64         
+ 3   latitude             18036 non-null  float64       
+ 4   longitude            18036 non-null  float64       
+ 5   datetime             18036 non-null  datetime64[ns]
+ 6   outage_reason        18036 non-null  object        
+ 7   people_affected      18036 non-null  int32         
+ 8   start_time           18036 non-null  datetime64[ns]
+ 9   end_time             18036 non-null  datetime64[ns]
+ 10  duration_in_minutes  18036 non-null  int32         
 ==================
-Your job is to figure out a pandas query to fetch the data requested by the user.
+Your job is to figure out a pandas query to fetch the data requested by the user. 
 Respond with a dictionary with the following keys : 'query'
 Your response should not contain anything else.
 Example 1:
@@ -231,15 +246,30 @@ User query : {input}
 Response : 
 '''
 
+RETRIEVE_REPHRASE_PROMPT = '''
+Given the above conversation history and the latest user input, \
+ your task is to ONLY REWRITE the user input in the light of the historical context if necessary. \
+ Include all necessary details. Keep the response short and to the point.\
+ Always respond ONLY with a valid JSON containing \
+ two keys 'original_input' and 'rephrased_input'. The response should be usable by json.loads() method.
+==============================
+Example:
+ Past conversation:
+    [HumanMessage(content='How many outages were reported in Montreal?'), 
+     AIMessage(content='The number of reported outages in Montreal is seven.'), 
+     HumanMessage(content='Out of these, which one lasted the longest?'), 
+     AIMessage(content='The longest outage reported in Montreal lasted for 196 minutes.')]
+ Current unser input: 'Can you provide a short report on that particular outage?' 
+ Response:
+    "{{
+        'original_input': 'Can you provide a short report on that particular outage?',
+        'rephrased_input': 'Can you provide a summary of the outage in Montreal that lasted the longest?'
+    }}"
+================================
 
-RETRIEVE_REPHRASE_PROMPT = ChatPromptTemplate.from_messages([
-('system',"Given the above conversation history and the latest user input, \
- your task is to ONLY REWRITE the user input that can used as a standalone question. Respond with a json with \
- two keys 'original_input' and 'rephrased_input' " ),
-MessagesPlaceholder(variable_name="chat_history"),
-("user","{input}")
-])
-
+ Past conversations : {chat_history}
+ Current user input: {input}
+'''
 
 DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
 ("system", "Answer the user's questions based on the context below. \
