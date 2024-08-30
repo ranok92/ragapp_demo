@@ -5,7 +5,6 @@ import streamlit as st  # 🎈 data web app development
 from streamlit_extras.stylable_container import stylable_container
 from utils.utils import *
 from utils.dashboard_utils import *
-import json
 import altair as alt 
 
 from prompts.prompt_template import *

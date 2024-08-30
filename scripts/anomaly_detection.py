@@ -12,7 +12,6 @@ from folium import JsCode
 import statistics
 #--- llm imports 
 
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
 
@@ -51,6 +50,7 @@ def get_data_full_anomaly():
     st.session_state.full_data_df = pd.read_csv(st.session_state.dataset_url)
 
 
+#--- setup llms and llm chains ---
 def setup_llms_anomaly():
 
     st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
@@ -104,7 +104,9 @@ def setup_llm_chains_anomaly():
                                 prompt=tabular_data_summarizer_prompt
                                 )
 
+#----------------------
 
+#----- Streamlit page building functions ------------
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def write_latest_update_time():
     st.markdown(f"<h2 style='text-align: center; color: #453030;'> Outage Tracker </h2> <p style='text-align: right'> Last Updated : {st.session_state.cur_data_df['datetime'][0]} ", unsafe_allow_html=True)

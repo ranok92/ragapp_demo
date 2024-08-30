@@ -7,42 +7,21 @@ import pandas as pd  # read csv, df manipulation
 
 #--- streamlit and other UI imports 
 import streamlit as st  # 🎈 data web app development
-from streamlit_folium import st_folium
 import streamlit_authenticator as stauth
-from streamlit_timeline import st_timeline
 from streamlit_extras.stylable_container import stylable_container
-import altair as alt
-import folium
-from folium.plugins import Realtime, MarkerCluster
-from streamlit_folium import st_folium
-from folium import JsCode
-
-import pandas_geojson as pdg
-
-import plotly.graph_objects as go
-
 import yaml
 from yaml.loader import SafeLoader
-import statistics
-import datetime
-#--- llm imports 
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_community.llms import Ollama
-from langchain import LLMChain, PromptTemplate
 
 #---- local imports ----
 from utils.utils import *
 from utils.dashboard_utils import *
 from prompts.prompt_template import *
-from scripts.ragapp import  check_sentence_hallucination, \
+from scripts.general_assistant import  check_sentence_hallucination, \
                             query_chain, get_session_chat_history, \
                             process_documents, load_documents, \
                             split_documents, load_vector_db, \
                             update_vector_db
 from timeseries_forecasting import *
-from st_aggrid import AgGrid
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
 from anomaly_detection import *
 
 with open('../assets/openai_api_key.txt', 'r') as f:

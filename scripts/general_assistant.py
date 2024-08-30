@@ -83,44 +83,33 @@ def update_vector_db():
     st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
 
 
-def setup_llms():
+def setup_llms_assistant():
 
-    if st.session_state.llm=='llama3':
-        st.session_state.llm_model_chat = Ollama(model='llama3', system='You are a helpful question answering bot.')
-        st.session_state.llm_model_instruct = Ollama(model='llama3', system="You are an LLM that is excellent at following instructions.")
-    
-    if st.session_state.llm=='claude':
-        return AnthropicLLM(model='claude-2.1')
-    
+    st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
 
-def setup_llm_chains():
+
+def setup_llm_chains_assistant():
 
     #build the conversation chain
     conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
     st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
 
-
-    #build the retriever chain 
-
-    # prompt_search_query = ChatPromptTemplate.from_messages([
-    # MessagesPlaceholder(variable_name="chat_history"),
-    # ("user","{input}"),
-    # ("user","Given the above conversation, generate a search query to look up to get information relevant to the conversation")
-    # ])
-    # retriever_chain = create_history_aware_retriever(llm, retriever, prompt_search_query)
-    
     #build the rephrase chain 
-    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=RETRIEVE_REPHRASE_PROMPT)
+    rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT)
+
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=rephrase_prompt)
 
 
     #build the document chain
-    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, DOCUMENT_CHAIN_PROMPT)
+    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, prompt = DOCUMENT_CHAIN_PROMPT)
 
     #build the router chain
     router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_2
     )
-    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, template=router_prompt, output_key='answer')
 
     #setup the email writing chain
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
@@ -281,8 +270,8 @@ def main():
         'Helper bot'
     )
     input_fields()
-    setup_llms()
-    setup_llm_chains()
+    setup_llms_assistant()
+    setup_llm_chains_assistant()
     print(st.session_state.source_docs)
 
 
