@@ -11,7 +11,6 @@ import altair as alt
 from prompts.prompt_template import *
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
-from utils.timeseries_forecasting_utils import *
 from langchain_core.messages import HumanMessage, AIMessage
 
 FORECASTING_FEATURES = [
