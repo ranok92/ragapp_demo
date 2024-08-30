@@ -71,39 +71,8 @@ def build_chat_window_assistant():
     #     if 'response_context' in st.session_state.keys():
     #         for doc in st.session_state.response_context:
     #             st.write(doc)
-
-
-
-def build_data_filter_window():
-    st.write('Set filters')
-    with st.form("Set filters"):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.session_state.db_filter_p_name = st.selectbox('Plant name', st.session_state.cumm_data_df['name'].unique())
-            st.session_state.db_filter_s_ts = st.selectbox('Start timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-            st.session_state.db_filter_e_ts = st.selectbox('End timestamp', st.session_state.cumm_data_df['timestamp'].unique())
-        with col2:
-            st.session_state.db_filter_inc_energy = st.checkbox('Energy anomaly', value=False)
-            st.session_state.db_filter_inc_flowrate = st.checkbox('Flowrate anomaly', value=False)
-            st.session_state.db_filter_inc_reservoir = st.checkbox('Reservoir level anomaly', value=False)
-
-        retrieve_data = st.form_submit_button("Fetch data")
-        if retrieve_data:
-            #build the query
-            query = f'(st.session_state.cumm_data_df["name"]=="{st.session_state.db_filter_p_name}") & \
-                        (st.session_state.cumm_data_df["timestamp"]>={st.session_state.db_filter_s_ts}) & \
-                            (st.session_state.cumm_data_df["timestamp"]<={st.session_state.db_filter_e_ts})'
-            if st.session_state.db_filter_inc_energy:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_total_energy_output"]==1)'
-            if st.session_state.db_filter_inc_flowrate:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_water_flow_rate"]==1)'
-            if st.session_state.db_filter_inc_reservoir:
-                query+= ' & (st.session_state.cumm_data_df["anomaly_reservoir_level"]==1)'
-            
-            final_query = f'st.session_state.cumm_data_df[{query}]'
-            print("FINAL QUERY : ", final_query)
-            AgGrid(eval(final_query))
     
+
 def build_doc_assistant_tab():
 
     with st.container(height=500):
