@@ -25,6 +25,11 @@ python install -e .
 
 To start the application:
 
+Run script to imitate the flow of live data to the application
+```
+cd ragapp_demo/utils
+python imitate_live_data.py --sleep-timer <int>
+```
 Host the geojson files.
 ```
 cd ragapp_demo/utils
