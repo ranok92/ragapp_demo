@@ -16,13 +16,9 @@ from yaml.loader import SafeLoader
 from utils.utils import *
 from utils.dashboard_utils import *
 from prompts.prompt_template import *
-from scripts.general_assistant import  check_sentence_hallucination, \
-                            query_chain, get_session_chat_history, \
-                            process_documents, load_documents, \
-                            split_documents, load_vector_db, \
-                            update_vector_db
 from timeseries_forecasting import *
 from anomaly_detection import *
+from general_assistant import *
 
 with open('../assets/openai_api_key.txt', 'r') as f:
     key = f.read()
@@ -54,33 +50,31 @@ def build_chat_window_assistant():
 
 def build_doc_assistant_tab():
 
+    input_fields()
+    setup_llms_assistant()
+    setup_llm_chains_assistant()
+    st.session_state.vector_db = combine_vector_dbs(VECTOR_DB_PATHS['Public'], VECTOR_DB_PATHS['Private'])
+    # App logic
+    #uploaded_file = st.session_state.source_docs
+
+
+    if "messages_gen_assist" not in st.session_state:
+        st.session_state.messages_gen_assist = []
+
+    st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+                    on_submit=query_chain,
+                    key='current_input')
+
     with st.container(height=500):
-        upload_doc_col, search_db_col = st.columns(2)
-        with upload_doc_col:
-            if 'messages' not in st.session_state.keys():
-                st.session_state.messages = []
-            
-            st.session_state.source_docs = st.file_uploader(label="Upload Documents", 
-                                                            type="pdf", 
-                                                            accept_multiple_files=True)
-            st.button("Submit documents", on_click=process_documents)
-            k_list = [3,4,5,6,7]
-            st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
-            st.session_state.func = st.selectbox('Select Database', ['Public', 'Private'], index=0)
-            st.session_state.vector_db = load_vector_db(st.session_state.vector_db_paths[st.session_state.func])
+        #display the chat history so far
+        for msg in st.session_state.messages_gen_assist:
+            st.chat_message(msg['speaker']).markdown(msg['content'])
 
-            with st.popover("Show files"):
-                metadatas = st.session_state.vector_db.get()['metadatas']
-                all_files = list(set([entry['source'] for entry in metadatas]))
-                mark_down_text = ''
-                for f in all_files:
-                    mark_down_text+= '- '+f+'\n'
-                print(mark_down_text)
-                st.markdown(mark_down_text)
-
-            uploaded_file = st.session_state.source_docs
-        with search_db_col:
-            build_chat_window_assistant()
+    #display the documents in the context used to come up with the answer
+    with st.container(height=500):
+        if 'response_context' in st.session_state.keys():
+            for doc in st.session_state.response_context:
+                st.write(doc)
 
 
 #---- Build solar forecast tab
@@ -89,8 +83,6 @@ def build_forecast_tab():
     print("running forecast tab")
     setup_llms_forecast()
     setup_llm_chains_forecast()
-    # read csv from a github repo
-    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
     st.session_state.full_forecast_data_df = get_data_forecast()
     plant_names = st.session_state.full_forecast_data_df['name'].unique()
     pred_linechart_kpi = 'total_energy_output'
@@ -159,24 +151,13 @@ def main():
     # ----------------------------------
 
 
-    #--- EXTERNAL DB INFORMATION  ----
+    #--- Data for anomaly_detection tab  ----
     st.session_state.dataset_url = "../data/dashboard/outage_monitoring_data.csv"
     st.session_state.cur_dataset_url = "../data/dashboard/outage_monitoring_data_per_hr.csv"
-    st.session_state.kpi_list = ['total_energy_output', 'reservoir_level', 'water_flow_rate', 'co2_emissions']
 
-    #--- TODO : Change the way the VECTOR_DB_PATHS  work in dashboard.py and ragapp.py ---
+    #--- Data for forecasting tab ----
+    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
 
-    #vector DBs for work efficiency improvement
-    st.session_state.vector_db_paths = {
-                    'Public' : Path('../vectorstores/energy_public'), 
-                    'Private' : Path('../vectorstores/energy_private'),
-                        }
-    
-    #loading db for anomaly solution assistant 
-
-    anomaly_soln_vector_db_path = Path('../vectorstores/powerplant_anomaly_solutions')
-    st.session_state.anomaly_soln_vector_db = load_vector_db(anomaly_soln_vector_db_path)
-    
     # read csv from a URL
 
     get_data_anomaly()
