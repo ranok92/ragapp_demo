@@ -271,6 +271,17 @@ Example:
  Current user input: {input}
 '''
 
+RETRIEVE_REPHRASE_PROMPT_GA = '''
+Given the above conversation history and the latest user input, \
+ your task is to ONLY REWRITE the user input in the light of the historical context if necessary. \
+ Include all necessary details. Keep the response short and to the point.\
+ Always respond ONLY with a valid JSON containing \
+ two keys 'original_input' and 'rephrased_input'. The response should be usable by json.loads() method.
+ 
+ Past conversations : {chat_history}
+ Current user input: {input}
+'''
+
 DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
 ("system", "Answer the user's questions based on the context below. \
  If you don't know the answer just say you dont know. Do not try to  \
