@@ -55,32 +55,40 @@ os.makedirs(TMP_DIR, exist_ok=True)
 #for the vector store
 
 
-def load_documents():
-    document_list = []
-    doc_files = glob.glob(f'{TMP_DIR.as_posix()}/*.pdf')
-    for doc in doc_files:
-        document_list.extend(PyPDFLoader(doc).load())
-    return document_list
+# def load_documents():
+#     document_list = []
+#     doc_files = glob.glob(f'{TMP_DIR.as_posix()}/*.pdf')
+#     for doc in doc_files:
+#         document_list.extend(PyPDFLoader(doc).load())
+#     return document_list
 
 
-def split_documents(documents):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=20)
-    texts = text_splitter.split_documents(documents)
-    return texts
+# def split_documents(documents):
+#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=20)
+#     texts = text_splitter.split_documents(documents)
+#     return texts
 
-def create_vector_db(texts):
-    vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
-    vectordb = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
-    #vectordb.persist()
-    return vectordb
+# def create_vector_db(texts):
+#     vectordb = Chroma.from_documents(texts, embedding=HuggingFaceEmbeddings())
+#     vectordb = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), embedding_function=HuggingFaceEmbeddings())
+#     #vectordb.persist()
+#     return vectordb
 
-
-def load_vector_db(path):
-    vectordb = Chroma(persist_directory=path.as_posix(), embedding_function=HuggingFaceEmbeddings())
-    return vectordb
-
-def update_vector_db():
-    st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS[st.session_state.func].as_posix(), embedding_function=HuggingFaceEmbeddings())
+# def update_vector_db():
+#     st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), embedding_function=HuggingFaceEmbeddings())
+ 
+@st.cache_resource
+def combine_vector_dbs(path1, path2):
+    vectordb1 = Chroma(persist_directory=path1.as_posix(), embedding_function=HuggingFaceEmbeddings())
+    vectordb2 = Chroma(persist_directory=path2.as_posix(), embedding_function=HuggingFaceEmbeddings())
+    vector_db2_data = vectordb2._collection.get(include=['documents', 'metadatas', 'embeddings'])
+    vectordb1._collection.add(
+        embeddings=vector_db2_data['embeddings'],
+        metadatas=vector_db2_data['metadatas'],
+        documents=vector_db2_data['documents'],
+        ids=vector_db2_data['ids']
+    )
+    return vectordb1
 
 
 def setup_llms_assistant():
@@ -97,7 +105,7 @@ def setup_llm_chains_assistant():
     st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
 
     #build the rephrase chain 
-    rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT)
+    rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
 
     st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=rephrase_prompt)
 
@@ -109,7 +117,7 @@ def setup_llm_chains_assistant():
     router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_2
     )
-    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, template=router_prompt, output_key='answer')
+    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
     #setup the email writing chain
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
@@ -146,46 +154,52 @@ def query_chain():
     #run the email chain
 
     query_text = st.session_state.current_input
-    update_vector_db()
-
     k = st.session_state.search_k if st.session_state.search_k else 3  
     retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
 
     #use chains
 
     #check if retrieval is required
-    resp = st.session_state.router_chain.invoke({'input': query_text})
+    input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
+
+    resp = st.session_state.rephrase_chain.invoke(input_dict)
+    resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
+    print("\n\n\n**********Rephrased input :", resp_string)
+    print("\n\n\n ****** CHAT HISTORY :", get_session_chat_history())
+
+
+    resp = st.session_state.router_chain.invoke({'input': resp_string})
     print("***RESPONSE QA : ", resp['answer'])
     is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
     
-    input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
     
     if is_qa.strip().lower()=='qa':
 
         #rephrase question using history
-        resp = st.session_state.rephrase_chain.invoke(input_dict)
-        resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
-        print("**********Rephrased input :", resp_string)
+       
         #use response to retrieve relevant documents 
-        docs = retriever.get_relevant_documents(resp_string)
-
+        docs = []
+        if st.session_state.use_kb:
+            docs = retriever.get_relevant_documents(resp_string)
+            print("\n\n\n************ Docs in the context :", docs)
         #get answer using relevant documents and question
         result = st.session_state.document_chain.invoke({'input':resp_string, 
                                                 'context':docs})
         
 
         #annotate the response with hallucination information
-        resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
-        anno_result = ""
-        for sent, score in zip(resp_sent, scores):
-            if score > 0.3: #0 is no hallu, 1 is hallu
-                sent = f":red-background[{sent}]"
-            anno_result += sent 
-        #result = anno_result
-        print("Scores ***************", scores)
-        print("RESULT ***************", result)
-        print("RESULT ***************", anno_result)
+        # resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=3)
+        # anno_result = ""
+        # for sent, score in zip(resp_sent, scores):
+        #     if score > 0.35: #0 is no hallu, 1 is hallu
+        #         sent = f":red-background[{sent}]"
+        #     anno_result += sent 
+        # #result = anno_result
+        # print("Scores ***************", scores)
+        # print("RESULT ***************", result)
+        # print("RESULT ***************", anno_result)
 
+        anno_result = result
         st.session_state.response = anno_result
         st.session_state.response_context = docs
 
@@ -217,15 +231,14 @@ def query_chain():
 ################################  front end functions  ################################
 def input_fields():
     
-    st.session_state.llm = 'llama3'
+    st.session_state.llm = 'llama3.1'
     with st.sidebar:
-        st.session_state.llm = st.selectbox('Select an LLM', ['llama3', 'claude'], index=0)
-        st.session_state.func = st.selectbox('Select function', ['IT Support', 'Doc Assistant'], index=0)
+        st.session_state.use_kb = st.toggle("Use Knowledge base.")
         k_list = [3,4,5,6,7]
         st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
 
-        st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
-        st.button("Submit documents", on_click=process_documents)
+        # st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
+        # st.button("Submit documents", on_click=process_documents)
 
 def get_session_chat_history():
     chat_list = st.session_state.messages 
@@ -237,31 +250,32 @@ def get_session_chat_history():
             chat_history.append(AIMessage(content=conv['content']))
     return chat_history
 
-@st.cache_data(show_spinner=False)
-def process_documents():
-    if not st.session_state.source_docs:
-        st.warning(f"Please upload the documents first.")
-    else:
 
-        for source_doc in st.session_state.source_docs:
-            with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
-                                             prefix=source_doc.name.split('.')[0],
-                                             suffix='.pdf') as tmp_file:
-                tmp_file.write(source_doc.read())
+# @st.cache_data(show_spinner=False)
+# def process_documents():
+#     if not st.session_state.source_docs:
+#         st.warning(f"Please upload the documents first.")
+#     else:
+
+#         for source_doc in st.session_state.source_docs:
+#             with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
+#                                              prefix=source_doc.name.split('.')[0],
+#                                              suffix='.pdf') as tmp_file:
+#                 tmp_file.write(source_doc.read())
         
-        with st.spinner("Loading documents . . ."):
-            documents = load_documents()
-        #
-        for _file in TMP_DIR.iterdir():
-            temp_file = TMP_DIR.joinpath(_file)
-            temp_file.unlink()
-        #
-        with st.spinner("Parsing text . . ."):
-            texts = split_documents(documents)
-            #
-        k = st.session_state.search_k if st.session_state.search_k else 7
-        with st.spinner("Building database . . "):
-            st.session_state.vector_db =  create_vector_db(texts)   
+#         with st.spinner("Loading documents . . ."):
+#             documents = load_documents()
+#         #
+#         for _file in TMP_DIR.iterdir():
+#             temp_file = TMP_DIR.joinpath(_file)
+#             temp_file.unlink()
+#         #
+#         with st.spinner("Parsing text . . ."):
+#             texts = split_documents(documents)
+#             #
+#         k = st.session_state.search_k if st.session_state.search_k else 7
+#         with st.spinner("Building database . . "):
+#             st.session_state.vector_db =  create_vector_db(texts)   
 
 def main():
     # page title
@@ -272,25 +286,15 @@ def main():
     input_fields()
     setup_llms_assistant()
     setup_llm_chains_assistant()
-    print(st.session_state.source_docs)
-
-
-    # question_list = [
-    #     'How many rows are there?',
-    #     'What is the range of values for MolWt with logS greater than 0?',
-    #     'How many rows have MolLogP value greater than 0.',
-    #     'Other']
-    # query_text = st.selectbox('Select an example query:', question_list)
-
+    st.session_state.vector_db = combine_vector_dbs(VECTOR_DB_PATHS['Public'], VECTOR_DB_PATHS['Private'])
     # App logic
-    uploaded_file = st.session_state.source_docs
+    #uploaded_file = st.session_state.source_docs
 
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    st.chat_input(placeholder = 'Enter query here ...', 
-                    disabled=not uploaded_file, 
+    st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
                     on_submit=query_chain,
                     key='current_input')
 
@@ -300,7 +304,7 @@ def main():
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
-    with st.container(height=200):
+    with st.container(height=500):
         if 'response_context' in st.session_state.keys():
             for doc in st.session_state.response_context:
                 st.write(doc)
