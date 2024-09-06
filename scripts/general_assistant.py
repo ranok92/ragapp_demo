@@ -160,12 +160,12 @@ def query_chain():
     #use chains
 
     #check if retrieval is required
-    input_dict = {'input': query_text, 'chat_history': get_session_chat_history()}
+    input_dict = {'input': query_text, 'chat_history': get_session_gen_assist_chat_history()}
 
     resp = st.session_state.rephrase_chain.invoke(input_dict)
     resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
     print("\n\n\n**********Rephrased input :", resp_string)
-    print("\n\n\n ****** CHAT HISTORY :", get_session_chat_history())
+    print("\n\n\n ****** CHAT HISTORY :", get_session_gen_assist_chat_history())
 
 
     resp = st.session_state.router_chain.invoke({'input': resp_string})
@@ -219,12 +219,12 @@ def query_chain():
         st.session_state.response_context = ""    
     
     #save the query in the chat history
-    st.session_state.messages.append({"speaker" : "user", "content": query_text})
+    st.session_state.messages_gen_assist.append({"speaker" : "user", "content": query_text})
     
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
-    st.session_state.messages.append({"speaker" : "AI",
+    st.session_state.messages_gen_assist.append({"speaker" : "AI",
                                     "content": anno_result})
     
 
@@ -240,8 +240,8 @@ def input_fields():
         # st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
         # st.button("Submit documents", on_click=process_documents)
 
-def get_session_chat_history():
-    chat_list = st.session_state.messages 
+def get_session_gen_assist_chat_history():
+    chat_list = st.session_state.messages_gen_assist 
     chat_history = []
     for conv in chat_list:
         if conv['speaker']=="user":
@@ -291,8 +291,8 @@ def main():
     #uploaded_file = st.session_state.source_docs
 
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    if "messages_gen_assist" not in st.session_state:
+        st.session_state.messages_gen_assist = []
 
     st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
                     on_submit=query_chain,
@@ -300,7 +300,7 @@ def main():
 
     with st.container(height=500):
         #display the chat history so far
-        for msg in st.session_state.messages:
+        for msg in st.session_state.messages_gen_assist:
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
