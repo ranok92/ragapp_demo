@@ -1,7 +1,6 @@
 
 import os, tempfile
 from pathlib import Path
-os.path.join('..')
 import streamlit as st
 import pytesseract
 
@@ -9,7 +8,6 @@ from langchain.vectorstores import Chroma
 
 #import for llms
 from langchain_community.llms import Ollama
-from langchain_anthropic import AnthropicLLM
 
 #import for embeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -18,12 +16,10 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma 
-from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
 
-from langchain.chains import create_history_aware_retriever
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain, ConversationChain, LLMChain
+from langchain.chains import LLMChain
 from langchain_core.messages import HumanMessage, AIMessage
 from prompts.prompt_template import *
 from utils.utils import *
@@ -34,8 +30,11 @@ warnings.filterwarnings("ignore")
 
 from selfcheckgpt.modeling_selfcheck import SelfCheckNLI
 import torch
+import numpy as np
 import spacy 
-from annotated_text import annotated_text
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -93,9 +92,10 @@ def combine_vector_dbs(path1, path2):
 
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = Ollama(model='llama3.1', format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = Ollama(model='llama3.1',  temperature = 0.2, system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature = 0.2, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
     # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
+    st.session_state.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2") #chroma default embedding model
 
 
 def setup_llm_chains_assistant():
@@ -150,6 +150,17 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
     return resp_sentences, sent_scores_nli
 
 
+def check_sentence_hallucination_cosine_similarity(
+                                                    context, 
+                                                    response, 
+                                                   ):
+    context_page_content = [doc.page_content for doc in context]
+    resp_sentences = [sent.text.strip() for sent in nlp(response).sents] # spacy sentence tokenization
+    sent_embeddings = st.session_state.embedding_model.encode(resp_sentences)
+    context_embeddings = st.session_state.embedding_model.encode(context_page_content)
+    sentence_cosine_scores = cosine_similarity(sent_embeddings, context_embeddings)
+    return resp_sentences, np.max(sentence_cosine_scores, axis=1)
+
 def query_chain():
     #run the email chain
 
@@ -189,17 +200,18 @@ def query_chain():
 
         #annotate the response with hallucination information
         # resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=3)
-        # anno_result = ""
-        # for sent, score in zip(resp_sent, scores):
-        #     if score > 0.35: #0 is no hallu, 1 is hallu
-        #         sent = f":red-background[{sent}]"
-        #     anno_result += sent 
-        # #result = anno_result
-        # print("Scores ***************", scores)
-        # print("RESULT ***************", result)
-        # print("RESULT ***************", anno_result)
+        resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result)
 
-        anno_result = result
+        anno_result = ""
+        for sent, score in zip(resp_sent, scores):
+            if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
+                sent = f":red-background[{sent}]"
+            anno_result += sent 
+        #result = anno_result
+        print("Scores ***************", scores)
+        print("RESULT ***************", result)
+        print("RESULT ***************", anno_result)
+        #anno_result = result
         st.session_state.response = anno_result
         st.session_state.response_context = docs
 
