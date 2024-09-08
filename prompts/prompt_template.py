@@ -55,7 +55,7 @@ ROUTER_PROMPT_TEMPLATE_BASIC = "Given an input, decide whether responding to it 
 
 CONV_PROMPT_TEMPLATE = "You are a helpful bot who can hold a polite conversation with a fellow human. \
                         You will be provided with a history of messages. Based on that you need to form a final \
-                        response. Try not to be too wordy.\n\n \n\n \
+                        response. Only respond to the last request. Try not to be too wordy.\n\n \n\n \
                         The chat history: {chat_history}\n \
                         Human's last chat: {input}"
 
@@ -277,7 +277,7 @@ Given the above conversation history and the latest user input, \
  Include all necessary details. Keep the response short and to the point.\
  Always respond ONLY with a valid JSON containing \
  two keys 'original_input' and 'rephrased_input'. The response should be usable by json.loads() method.
- 
+
  Past conversations : {chat_history}
  Current user input: {input}
 '''
