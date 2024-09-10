@@ -81,8 +81,8 @@ os.makedirs(TMP_DIR, exist_ok=True)
 
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = Ollama(model='llama3.1',  temperature = 0.2, system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature = 0.2, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = Ollama(model='llama3.1',  temperature = 0.8, system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature = 0.8, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
     # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
     st.session_state.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2") #chroma default embedding model
 
@@ -112,7 +112,6 @@ def setup_llm_chains_assistant():
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
     st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
 
-@st.cache_resource
 def load_vectordbs():
     st.session_state.private_db = Chroma(persist_directory=VECTOR_DB_PATHS['Private'].as_posix(), 
                                          embedding_function=HuggingFaceEmbeddings())
@@ -226,12 +225,13 @@ def query_chain():
                 if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
                     sent = f":red-background[{sent}]"
                 anno_result += sent 
+            print("Scores ***************", scores)
+            print("RESULT ***************", result)
+            print("RESULT ***************", anno_result)
         else:
             anno_result = result
         #result = anno_result
-        print("Scores ***************", scores)
-        print("RESULT ***************", result)
-        print("RESULT ***************", anno_result)
+   
         #anno_result = result
         st.session_state.response = anno_result
         st.session_state.response_context = docs
@@ -263,17 +263,6 @@ def query_chain():
     
 
 ################################  front end functions  ################################
-def input_fields():
-    
-    st.session_state.llm = 'llama3.1'
-    with st.sidebar:
-        st.session_state.use_kb = st.toggle("Use Knowledge base.")
-        k_list = [3,4,5,6,7]
-        st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
-
-        # st.session_state.source_docs = st.file_uploader(label="Upload Documents", type="pdf", accept_multiple_files=True)
-        # st.button("Submit documents", on_click=process_documents)
-
 def get_session_gen_assist_chat_history():
     chat_list = st.session_state.messages_gen_assist 
     chat_history = []
@@ -284,7 +273,7 @@ def get_session_gen_assist_chat_history():
             chat_history.append(AIMessage(content=conv['content']))
     return chat_history
 
-
+@st.experimental_fragment
 def build_chatbot_params_console():
     with stylable_container(key='bot_param_header',
                             css_styles='''
@@ -337,7 +326,7 @@ def process_documents():
         st.session_state.uploaded_files = []
         st.session_state.private_db.add_documents(texts)
 
-
+@st.experimental_fragment
 def delete_files_from_db():
     rel_ids = []
     private_db_metadata = st.session_state.private_db._collection.get(include=['metadatas'])
@@ -348,9 +337,12 @@ def delete_files_from_db():
             if doc_metadata['source']==fname:
                 rel_ids_file.append(id_val)
         rel_ids.extend(rel_ids_file)
-    st.session_state.private_db._collection.delete(rel_ids)
+    if len(rel_ids):
+        st.session_state.private_db._collection.delete(rel_ids)
+    st.session_state.db_del_files = []
 
 
+@st.experimental_fragment
 def build_doc_management_console():
     with stylable_container(key='doc_management_header',
                             css_styles='''
@@ -377,7 +369,7 @@ def build_doc_management_console():
             st.button("Cannot delete public files", on_click=delete_files_from_db, disabled=True)
         else:
             st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
-            st.button("Select ", on_click=delete_files_from_db)
+            st.button("Delete ", on_click=delete_files_from_db)
 
 
 def main():
