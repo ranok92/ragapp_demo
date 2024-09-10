@@ -285,33 +285,6 @@ def get_session_gen_assist_chat_history():
     return chat_history
 
 
-# @st.cache_data(show_spinner=False)
-# def process_documents():
-#     if not st.session_state.source_docs:
-#         st.warning(f"Please upload the documents first.")
-#     else:
-
-#         for source_doc in st.session_state.source_docs:
-#             with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
-#                                              prefix=source_doc.name.split('.')[0],
-#                                              suffix='.pdf') as tmp_file:
-#                 tmp_file.write(source_doc.read())
-        
-#         with st.spinner("Loading documents . . ."):
-#             documents = load_documents()
-#         #
-#         for _file in TMP_DIR.iterdir():
-#             temp_file = TMP_DIR.joinpath(_file)
-#             temp_file.unlink()
-#         #
-#         with st.spinner("Parsing text . . ."):
-#             texts = split_documents(documents)
-#             #
-#         k = st.session_state.search_k if st.session_state.search_k else 7
-#         with st.spinner("Building database . . "):
-#             st.session_state.vector_db =  create_vector_db(texts)   
-
-
 def build_chatbot_params_console():
     with stylable_container(key='bot_param_header',
                             css_styles='''
@@ -366,7 +339,17 @@ def process_documents():
 
 
 def delete_files_from_db():
-    pass
+    rel_ids = []
+    private_db_metadata = st.session_state.private_db._collection.get(include=['metadatas'])
+
+    for fname in st.session_state.db_del_files:
+        rel_ids_file = []
+        for id_val, doc_metadata in zip(private_db_metadata['ids'], private_db_metadata['metadatas']):
+            if doc_metadata['source']==fname:
+                rel_ids_file.append(id_val)
+        rel_ids.extend(rel_ids_file)
+    st.session_state.private_db._collection.delete(rel_ids)
+
 
 def build_doc_management_console():
     with stylable_container(key='doc_management_header',
@@ -390,9 +373,12 @@ def build_doc_management_console():
             files_db = get_db_files(st.session_state.private_db)
         AgGrid(files_db)
 
-        files_selected = st.multiselect('Select :',options=files_db, placeholder='Choose files')
-        del_files = st.button("Delete", on_click=delete_files_from_db)
-        print(files_selected)
+        if st.session_state.db_view_selected=='Public':
+            st.button("Cannot delete public files", on_click=delete_files_from_db, disabled=True)
+        else:
+            st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
+            st.button("Select ", on_click=delete_files_from_db)
+
 
 def main():
     # page title
@@ -416,8 +402,8 @@ def main():
 
     col1, col2 = st.columns([0.3,0.7], gap="small")
     with col1:
-        respose_gen_console =  st.container(height=320)  
-        document_management_console =  st.container(height=580)
+        respose_gen_console =  st.container(height=350)  
+        document_management_console =  st.container(height=550)
     with col2:
         chat_window =  st.container(height=500)  
         context_display_console = st.container(height=400)
