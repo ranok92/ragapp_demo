@@ -13,7 +13,7 @@ from langchain_community.llms import Ollama
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 
-from langchain.document_loaders import PyPDFLoader
+from langchain.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma 
 
@@ -34,8 +34,10 @@ import numpy as np
 import spacy 
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-
-
+import time 
+from streamlit_extras.stylable_container import stylable_container
+from st_aggrid import AgGrid
+import pandas as pd
 nlp = spacy.load("en_core_web_sm")
 
 VECTOR_DB_PATHS = {
@@ -76,19 +78,6 @@ os.makedirs(TMP_DIR, exist_ok=True)
 # def update_vector_db():
 #     st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), embedding_function=HuggingFaceEmbeddings())
  
-@st.cache_resource
-def combine_vector_dbs(path1, path2):
-    vectordb1 = Chroma(persist_directory=path1.as_posix(), embedding_function=HuggingFaceEmbeddings())
-    vectordb2 = Chroma(persist_directory=path2.as_posix(), embedding_function=HuggingFaceEmbeddings())
-    vector_db2_data = vectordb2._collection.get(include=['documents', 'metadatas', 'embeddings'])
-    vectordb1._collection.add(
-        embeddings=vector_db2_data['embeddings'],
-        metadatas=vector_db2_data['metadatas'],
-        documents=vector_db2_data['documents'],
-        ids=vector_db2_data['ids']
-    )
-    return vectordb1
-
 
 def setup_llms_assistant():
 
@@ -123,6 +112,34 @@ def setup_llm_chains_assistant():
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
     st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
 
+@st.cache_resource
+def load_vectordbs():
+    st.session_state.private_db = Chroma(persist_directory=VECTOR_DB_PATHS['Private'].as_posix(), 
+                                         embedding_function=HuggingFaceEmbeddings())
+    
+    st.session_state.private_db_docs = set([elem['source'] for elem in st.session_state.private_db.get(include=['metadatas'])['metadatas']])
+
+    st.session_state.public_db = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), 
+                                        embedding_function=HuggingFaceEmbeddings())
+    
+    st.session_state.public_db_docs = set([elem['source'] for elem in st.session_state.public_db.get(include=['metadatas'])['metadatas']])
+
+
+def get_db_files(db):
+    filenames = list(set([elem['source'] for elem in db.get(include=['metadatas'])['metadatas']]))
+    return pd.DataFrame({'filename': filenames})
+
+
+def get_relevant_documents_from_dbs(query_text):
+    rel_docs_and_score_pvt = st.session_state.private_db.similarity_search_with_score(query_text, 
+                                                                        k=st.session_state.search_k,
+                                                                        )
+    rel_docs_and_score_pub = st.session_state.public_db.similarity_search_with_score(query_text, 
+                                                                    k=st.session_state.search_k,
+                                                                    )
+    docs_and_scores = rel_docs_and_score_pub + rel_docs_and_score_pvt 
+    docs_and_scores.sort(key=lambda x:x[1], reverse=True)
+    return [item[0] for item in docs_and_scores[0:st.session_state.search_k]]
 
 
 def check_sentence_hallucination(query, context, response, sample_size=5):
@@ -161,12 +178,11 @@ def check_sentence_hallucination_cosine_similarity(
     sentence_cosine_scores = cosine_similarity(sent_embeddings, context_embeddings)
     return resp_sentences, np.max(sentence_cosine_scores, axis=1)
 
+
 def query_chain():
     #run the email chain
 
     query_text = st.session_state.current_input
-    k = st.session_state.search_k if st.session_state.search_k else 3  
-    retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k})
 
     #use chains
 
@@ -191,7 +207,7 @@ def query_chain():
         #use response to retrieve relevant documents 
         docs = []
         if st.session_state.use_kb:
-            docs = retriever.get_relevant_documents(resp_string)
+            docs = get_relevant_documents_from_dbs(resp_string)
             print("\n\n\n************ Docs in the context :", docs)
         #get answer using relevant documents and question
         result = st.session_state.document_chain.invoke({'input':resp_string, 
@@ -199,14 +215,19 @@ def query_chain():
         
 
         #annotate the response with hallucination information
-        # resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=3)
-        resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result)
-
-        anno_result = ""
-        for sent, score in zip(resp_sent, scores):
-            if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
-                sent = f":red-background[{sent}]"
-            anno_result += sent 
+        if st.session_state.use_kb:
+            start_time = time.time()
+            #resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
+            
+            resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result)
+            print("\n\n\n Execution time : ", time.time()-start_time)
+            anno_result = ""
+            for sent, score in zip(resp_sent, scores):
+                if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
+                    sent = f":red-background[{sent}]"
+                anno_result += sent 
+        else:
+            anno_result = result
         #result = anno_result
         print("Scores ***************", scores)
         print("RESULT ***************", result)
@@ -221,6 +242,7 @@ def query_chain():
         st.session_state.response = result
         st.session_state.response_context = ""    
     
+
     if is_qa.strip().lower()=='writing':
         resp = st.session_state.rephrase_chain.invoke(input_dict)
         resp_string = get_key_val_from_llm_json_string(resp['text'], 'rephrased_input')
@@ -289,37 +311,135 @@ def get_session_gen_assist_chat_history():
 #         with st.spinner("Building database . . "):
 #             st.session_state.vector_db =  create_vector_db(texts)   
 
+
+def build_chatbot_params_console():
+    with stylable_container(key='bot_param_header',
+                            css_styles='''
+                            {
+                                background-color: #ddd7d7;
+                                padding: 0;
+                            }
+                            '''):
+        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Bot parameter console</h2>", unsafe_allow_html=True)
+    st.session_state.use_kb = st.toggle("Use Knowledge base.")
+    k_list = [3,4,5,6,7]
+    st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
+    st.session_state.model_temperature = st.slider('Model temperature', min_value=0.0, max_value=1.0, step=0.01)
+
+
+def load_documents(filepaths):
+    document_list = []
+    for doc in filepaths:
+        if doc.split('.')[-1]=='pdf':
+            document_list.extend(PyPDFLoader(doc).load())
+        elif doc.split('.')[-1]=='txt':
+            document_list.extend(TextLoader(doc).load())
+    return document_list
+
+def split_documents(documents):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=20)
+    texts = text_splitter.split_documents(documents)
+    return texts
+
+def process_documents():
+    if not st.session_state.uploaded_files:
+        st.warning(f"Please upload the documents first.")
+    else:
+
+        for source_doc in st.session_state.uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
+                                             prefix=source_doc.name.split('.')[0],
+                                             suffix='.pdf') as tmp_file:
+                tmp_file.write(source_doc.read())
+        
+        temp_files = glob.glob(f'{TMP_DIR}/*')
+        with st.spinner("Loading documents . . ."):
+            documents = load_documents(temp_files)
+        # for _file in TMP_DIR.iterdir():
+        #     temp_file = TMP_DIR.joinpath(_file)
+        #     temp_file.unlink()
+        #
+        with st.spinner("Parsing text . . ."):
+            texts = split_documents(documents)
+        st.session_state.uploaded_files = []
+        st.session_state.private_db.add_documents(texts)
+
+
+def delete_files_from_db():
+    pass
+
+def build_doc_management_console():
+    with stylable_container(key='doc_management_header',
+                            css_styles='''
+                            {
+                               background-color: #ddd7d7;
+                               padding: 0;
+                            }
+                            '''):
+        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Doc management</h3>", unsafe_allow_html=True)
+    st.session_state.uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
+    print(st.session_state.uploaded_files)
+    st.button("Submit documents", on_click=process_documents)
+    st.session_state.db_view_selected = st.selectbox("View files in Database:", ['Public', 'Private'])
+    #view_files_button = st.button("View files", on_click=process_documents)
+    db = pd.read_csv('https://raw.githubusercontent.com/fivethirtyeight/data/master/airline-safety/airline-safety.csv')
+    with st.popover("View files"):
+        if st.session_state.db_view_selected=='Public':
+            files_db = get_db_files(st.session_state.public_db)
+        else:
+            files_db = get_db_files(st.session_state.private_db)
+        AgGrid(files_db)
+
+        files_selected = st.multiselect('Select :',options=files_db, placeholder='Choose files')
+        del_files = st.button("Delete", on_click=delete_files_from_db)
+        print(files_selected)
+
 def main():
     # page title
-    st.set_page_config(page_title='Helper bot')
+    st.set_page_config(
+        page_title="EnergyGPT Dashboard",
+        page_icon="✅",
+        layout="wide",
+    )
     st.title(
         'Helper bot'
     )
-    input_fields()
     setup_llms_assistant()
     setup_llm_chains_assistant()
-    st.session_state.vector_db = combine_vector_dbs(VECTOR_DB_PATHS['Public'], VECTOR_DB_PATHS['Private'])
-    # App logic
+    load_vectordbs()    
+# App logic
     #uploaded_file = st.session_state.source_docs
 
 
     if "messages_gen_assist" not in st.session_state:
         st.session_state.messages_gen_assist = []
 
-    st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
-                    on_submit=query_chain,
-                    key='current_input')
+    col1, col2 = st.columns([0.3,0.7], gap="small")
+    with col1:
+        respose_gen_console =  st.container(height=320)  
+        document_management_console =  st.container(height=580)
+    with col2:
+        chat_window =  st.container(height=500)  
+        context_display_console = st.container(height=400)
+    with chat_window:
+        st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+                        on_submit=query_chain,
+                        key='current_input')
 
-    with st.container(height=500):
         #display the chat history so far
-        for msg in st.session_state.messages_gen_assist:
-            st.chat_message(msg['speaker']).markdown(msg['content'])
+        with st.container(height=400):
+            for msg in st.session_state.messages_gen_assist:
+                st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
-    with st.container(height=500):
+    with context_display_console:
         if 'response_context' in st.session_state.keys():
             for doc in st.session_state.response_context:
                 st.write(doc)
+    with respose_gen_console:
+        build_chatbot_params_console()
 
+    with document_management_console:
+        build_doc_management_console()
 if __name__=='__main__':
   main()
