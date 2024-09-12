@@ -32,7 +32,7 @@ def build_chat_window_assistant():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     st.chat_input(placeholder = 'Enter query here ...', 
-                on_submit=query_chain,
+                on_submit=query_chain_general_assistant,
                 key='current_input')
     chat_row_assistant = st.empty()
     #context_row = st.empty()
@@ -49,33 +49,50 @@ def build_chat_window_assistant():
     
 
 def build_doc_assistant_tab():
-
-    input_fields()
+    with stylable_container(
+        key='forecast_header',
+        css_styles='''
+        {
+            text-align: center;
+            padding: 20px;
+            background: #4b6cb7;
+            color: white;
+            border-radius: 10px;
+        }
+''',
+    ):
+        st.markdown(f'<h2 style="color: white;"> Assistant </h2>', unsafe_allow_html=True)
     setup_llms_assistant()
     setup_llm_chains_assistant()
-    st.session_state.vector_db = combine_vector_dbs(VECTOR_DB_PATHS['Public'], VECTOR_DB_PATHS['Private'])
-    # App logic
-    #uploaded_file = st.session_state.source_docs
-
-
+    load_vectordbs()    
     if "messages_gen_assist" not in st.session_state:
         st.session_state.messages_gen_assist = []
 
-    st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
-                    on_submit=query_chain,
-                    key='current_input')
+    col1, col2 = st.columns([0.3,0.7], gap="small")
+    with col1:
+        respose_gen_console =  st.container(height=280, border=True)
+        document_management_console =  st.container(height=620, border=True)
+    with col2:
+        chat_window =  st.container(height=500)  
+        context_display_console = st.container(height=400)
+    with chat_window:
+        st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+                        on_submit=query_chain_general_assistant,
+                        key='current_input')
 
-    with st.container(height=500):
         #display the chat history so far
-        for msg in st.session_state.messages_gen_assist:
-            st.chat_message(msg['speaker']).markdown(msg['content'])
+        with st.container(height=400):
+            for msg in st.session_state.messages_gen_assist:
+                st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
-    with st.container(height=500):
-        if 'response_context' in st.session_state.keys():
-            for doc in st.session_state.response_context:
-                st.write(doc)
+    with context_display_console:
+        build_context_display_window()
+    with respose_gen_console:
+        build_chatbot_params_console()
 
+    with document_management_console:
+        build_doc_management_console()
 
 #---- Build solar forecast tab
 
@@ -100,7 +117,7 @@ def build_forecast_tab():
         }
 ''',
     ):
-        st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
+        st.markdown(f'<h2 style="color: white;"> Forecast Dashboard </h2>', unsafe_allow_html=True)
     col1, col2, = st.columns([0.27, 0.73])
     with col1:
         param_form_container = st.container(height=800, border=True)
@@ -142,7 +159,7 @@ def build_forecast_tab():
 
 def main():
     st.set_page_config(
-        page_title="EnergyGPT Dashboard",
+        page_title="DecisionGPT Dashboard",
         page_icon="✅",
         layout="wide",
     )
@@ -166,7 +183,7 @@ def main():
     setup_llms_anomaly()
     setup_llm_chains_anomaly()
 
-    st.title("EnergyGPT: Monitoring & Assistance")
+    st.title("DecisionGPT: Monitoring & Assistance")
 
 
     if 'count' not in st.session_state:
@@ -206,7 +223,6 @@ def main():
                                         css_styles=''' 
                                         {
                                             text-align: center;
-                                            padding: 20px;
                                             background: #4b6cb7;
                                             color: white;
                                             border-radius: 10px;
@@ -216,7 +232,7 @@ def main():
                 grid_overview_container = st.container(height=550, border=False)
                 
                 with header_container:
-                    st.markdown("<h2 style='font-family: sans-serif; text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
+                    st.markdown("<h2 style= 'text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
 
                 with map_and_chat_container:
                     map_col, chat_col = st.columns([0.7, 0.3])
