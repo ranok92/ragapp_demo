@@ -320,11 +320,11 @@ def build_chatbot_params_console():
     with stylable_container(key='bot_param_header',
                             css_styles='''
                             {
-                                background-color: #ddd7d7;
+                                background-color: white;
                                 padding: 0;
                             }
                             '''):
-        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Bot parameter console</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Generation Parameters</h3>", unsafe_allow_html=True)
     st.session_state.use_kb = st.toggle("Use Knowledge base")
     st.session_state.use_hallu_detect = st.toggle("Check for hallucination")
     k_list = [3,4,5,6,7]
@@ -344,6 +344,7 @@ def split_documents(documents):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=20)
     texts = text_splitter.split_documents(documents)
     return texts
+
 
 @st.experimental_fragment
 def process_documents():
@@ -389,11 +390,11 @@ def build_doc_management_console():
     with stylable_container(key='doc_management_header',
                             css_styles='''
                             {
-                               background-color: #ddd7d7;
+                               background-color: white;
                                padding: 0;
                             }
                             '''):
-        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Doc management</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Document Management</h3>", unsafe_allow_html=True)
     st.session_state.uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
     st.button("Submit documents", on_click=process_documents)
     st.session_state.db_view_selected = st.selectbox("View files in Database:", ['Public', 'Private'])
@@ -414,6 +415,7 @@ def build_doc_management_console():
 def build_context_display_window():
     row_container_list = []
     if 'response_context' in st.session_state and st.session_state.response_context !="":
+        st.markdown("<h3 style='font-family: sans-serif; text-align: left; color: black;'> Supporting documents :</h3>", unsafe_allow_html=True)
 
         for _ in st.session_state.response_context:
             row_container_list.append(stylable_container(key='context_data',
@@ -428,7 +430,9 @@ def build_context_display_window():
     
     i = 0
     if 'response_context' in st.session_state and st.session_state.response_context !="":
+
         for context_doc in st.session_state.response_context:
+
             context_metadata = context_doc.metadata
             with row_container_list[i]:
                 context_disp_col, context_disp_col2 = st.columns([0.8, 0.2])
@@ -464,11 +468,11 @@ def main():
 
     col1, col2 = st.columns([0.3,0.7], gap="small")
     with col1:
-        respose_gen_console =  st.container(height=280)  
-        document_management_console =  st.container(height=620)
+        respose_gen_console =  st.container(height=280, border=False)  
+        document_management_console =  st.container(height=620,  border=False)
     with col2:
-        chat_window =  st.container(height=500)  
-        context_display_console = st.container(height=400)
+        chat_window =  st.container(height=500,  border=False)  
+        context_display_console = st.container(height=400,  border=False)  
     with chat_window:
         st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
                         on_submit=query_chain_general_assistant,
