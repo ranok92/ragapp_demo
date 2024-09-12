@@ -273,11 +273,11 @@ Example:
 
 RETRIEVE_REPHRASE_PROMPT_GA = '''
 Given the above conversation history and the latest user input, \
- your task is to ONLY REWRITE the user input in the light of the historical context if necessary. \
+ your task is to ONLY REWRITE the user input in the light of the historical context if necessary. No need to mention that you used the context to rephrase. \
  Include all necessary details. Keep the response short and to the point.\
  Always respond ONLY with a valid JSON containing \
  two keys 'original_input' and 'rephrased_input'. The response should be usable by json.loads() method.
-
+ 
  Past conversations : {chat_history}
  Current user input: {input}
 '''
