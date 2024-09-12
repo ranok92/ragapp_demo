@@ -38,6 +38,9 @@ import time
 from streamlit_extras.stylable_container import stylable_container
 from st_aggrid import AgGrid
 import pandas as pd
+import re 
+from langchain_openai import ChatOpenAI
+
 nlp = spacy.load("en_core_web_sm")
 
 VECTOR_DB_PATHS = {
@@ -81,8 +84,21 @@ os.makedirs(TMP_DIR, exist_ok=True)
 
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = Ollama(model='llama3.1',  temperature = 0.8, system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature = 0.8, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    with open('../assets/openai_api_key.txt', 'r') as f:
+        key = f.read()
+    os.environ["OPENAI_API_KEY"]=key
+    st.session_state.llm_openai = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+        max_retries=2,
+        # api_key="...",
+        # base_url="...",
+        # organization="...",
+        # other params...
+    )
+    
     # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
     st.session_state.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2") #chroma default embedding model
 
@@ -96,7 +112,7 @@ def setup_llm_chains_assistant():
     #build the rephrase chain 
     rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
 
-    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=rephrase_prompt)
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_openai, prompt=rephrase_prompt)
 
 
     #build the document chain
@@ -126,7 +142,8 @@ def load_vectordbs():
 
 def get_db_files(db):
     filenames = list(set([elem['source'] for elem in db.get(include=['metadatas'])['metadatas']]))
-    return pd.DataFrame({'filename': filenames})
+    fnames_only = [doc_name.split('\\')[-1] for doc_name in filenames]
+    return pd.DataFrame({'filename': fnames_only})
 
 
 def get_relevant_documents_from_dbs(query_text):
@@ -136,8 +153,10 @@ def get_relevant_documents_from_dbs(query_text):
     rel_docs_and_score_pub = st.session_state.public_db.similarity_search_with_score(query_text, 
                                                                     k=st.session_state.search_k,
                                                                     )
-    docs_and_scores = rel_docs_and_score_pub + rel_docs_and_score_pvt 
-    docs_and_scores.sort(key=lambda x:x[1], reverse=True)
+    docs_and_scores = rel_docs_and_score_pub + rel_docs_and_score_pvt
+
+
+    docs_and_scores.sort(key=lambda x:x[1])
     return [item[0] for item in docs_and_scores[0:st.session_state.search_k]]
 
 
@@ -170,6 +189,7 @@ def check_sentence_hallucination_cosine_similarity(
                                                     context, 
                                                     response, 
                                                    ):
+  
     context_page_content = [doc.page_content for doc in context]
     resp_sentences = [sent.text.strip() for sent in nlp(response).sents] # spacy sentence tokenization
     sent_embeddings = st.session_state.embedding_model.encode(resp_sentences)
@@ -178,7 +198,29 @@ def check_sentence_hallucination_cosine_similarity(
     return resp_sentences, np.max(sentence_cosine_scores, axis=1)
 
 
-def query_chain():
+def annotate_response(reponse_sentences, scores, hallu_method='selfcheckgpt'):
+    anno_result = ""
+
+    if hallu_method=='selfcheckgpt':
+        for sent, score in zip(reponse_sentences, scores):
+            if score >= 0.6: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
+                sent = f":red-background[{sent}]"
+            if score > 0.35 and score < 0.6:
+                sent = f":orange-background[{sent}]"
+
+            anno_result += sent  
+    if hallu_method=='cosine_similarity':
+        for sent, score in zip(reponse_sentences, scores):
+            if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
+                sent = f":red-background[{sent}]"
+            if score > 0.5 and score < 0.65:
+                sent = f":orange-background[{sent}]"
+
+            anno_result += sent 
+    return anno_result
+
+
+def query_chain_general_assistant():
     #run the email chain
 
     query_text = st.session_state.current_input
@@ -215,19 +257,19 @@ def query_chain():
 
         #annotate the response with hallucination information
         if st.session_state.use_kb:
+            regex = re.compile("[^a-zA-Z0-9.,!' $\n\-():]")
+            result_clean = regex.sub('', result)
             start_time = time.time()
             #resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
-            
-            resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result)
-            print("\n\n\n Execution time : ", time.time()-start_time)
-            anno_result = ""
-            for sent, score in zip(resp_sent, scores):
-                if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
-                    sent = f":red-background[{sent}]"
-                anno_result += sent 
-            print("Scores ***************", scores)
-            print("RESULT ***************", result)
-            print("RESULT ***************", anno_result)
+            if st.session_state.use_hallu_detect:
+                resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result_clean)
+                print("\n\n\n Execution time : ", time.time()-start_time)
+                anno_result = annotate_response(resp_sent, scores, 'cosine_similarity')
+                # print("Scores ***************", scores)
+                # print("RESULT ***************", result)
+                # print("RESULT ***************", anno_result)
+            else:
+                anno_result = result
         else:
             anno_result = result
         #result = anno_result
@@ -282,11 +324,11 @@ def build_chatbot_params_console():
                                 padding: 0;
                             }
                             '''):
-        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Bot parameter console</h2>", unsafe_allow_html=True)
-    st.session_state.use_kb = st.toggle("Use Knowledge base.")
+        st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Bot parameter console</h3>", unsafe_allow_html=True)
+    st.session_state.use_kb = st.toggle("Use Knowledge base")
+    st.session_state.use_hallu_detect = st.toggle("Check for hallucination")
     k_list = [3,4,5,6,7]
     st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
-    st.session_state.model_temperature = st.slider('Model temperature', min_value=0.0, max_value=1.0, step=0.01)
 
 
 def load_documents(filepaths):
@@ -303,11 +345,11 @@ def split_documents(documents):
     texts = text_splitter.split_documents(documents)
     return texts
 
+@st.experimental_fragment
 def process_documents():
     if not st.session_state.uploaded_files:
         st.warning(f"Please upload the documents first.")
     else:
-
         for source_doc in st.session_state.uploaded_files:
             with tempfile.NamedTemporaryFile(delete=False, dir=TMP_DIR.as_posix(), 
                                              prefix=source_doc.name.split('.')[0],
@@ -317,10 +359,10 @@ def process_documents():
         temp_files = glob.glob(f'{TMP_DIR}/*')
         with st.spinner("Loading documents . . ."):
             documents = load_documents(temp_files)
-        # for _file in TMP_DIR.iterdir():
-        #     temp_file = TMP_DIR.joinpath(_file)
-        #     temp_file.unlink()
-        #
+        for _file in TMP_DIR.iterdir():
+            temp_file = TMP_DIR.joinpath(_file)
+            temp_file.unlink()
+        
         with st.spinner("Parsing text . . ."):
             texts = split_documents(documents)
         st.session_state.uploaded_files = []
@@ -334,7 +376,7 @@ def delete_files_from_db():
     for fname in st.session_state.db_del_files:
         rel_ids_file = []
         for id_val, doc_metadata in zip(private_db_metadata['ids'], private_db_metadata['metadatas']):
-            if doc_metadata['source']==fname:
+            if fname==doc_metadata['source'].split('\\')[-1]:
                 rel_ids_file.append(id_val)
         rel_ids.extend(rel_ids_file)
     if len(rel_ids):
@@ -353,11 +395,8 @@ def build_doc_management_console():
                             '''):
         st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Doc management</h3>", unsafe_allow_html=True)
     st.session_state.uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
-    print(st.session_state.uploaded_files)
     st.button("Submit documents", on_click=process_documents)
     st.session_state.db_view_selected = st.selectbox("View files in Database:", ['Public', 'Private'])
-    #view_files_button = st.button("View files", on_click=process_documents)
-    db = pd.read_csv('https://raw.githubusercontent.com/fivethirtyeight/data/master/airline-safety/airline-safety.csv')
     with st.popover("View files"):
         if st.session_state.db_view_selected=='Public':
             files_db = get_db_files(st.session_state.public_db)
@@ -371,6 +410,37 @@ def build_doc_management_console():
             st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
             st.button("Delete ", on_click=delete_files_from_db)
 
+@st.experimental_fragment
+def build_context_display_window():
+    row_container_list = []
+    if 'response_context' in st.session_state and st.session_state.response_context !="":
+
+        for _ in st.session_state.response_context:
+            row_container_list.append(stylable_container(key='context_data',
+                            css_styles='''
+                            {
+                               background-color:  #e1e1ea;
+                               padding: 5px;
+                               height: 65px;
+                               border-radius: 10px;
+                            }
+                            '''))
+    
+    i = 0
+    if 'response_context' in st.session_state and st.session_state.response_context !="":
+        for context_doc in st.session_state.response_context:
+            context_metadata = context_doc.metadata
+            with row_container_list[i]:
+                context_disp_col, context_disp_col2 = st.columns([0.8, 0.2])
+
+                with context_disp_col:
+                    data_source = context_metadata['source'].split('\\')[-1]
+                    st.markdown(f"<p style='font-size: 1.2em'> <b>Source: </b> {data_source} &nbsp &nbsp &nbsp <b>Page: </b> {context_metadata['page']}</p>",  unsafe_allow_html=True)
+                with context_disp_col2:
+                    with st.popover("View page contents"):
+                        st.write(context_doc.page_content)
+
+            i+=1
 
 def main():
     # page title
@@ -394,14 +464,14 @@ def main():
 
     col1, col2 = st.columns([0.3,0.7], gap="small")
     with col1:
-        respose_gen_console =  st.container(height=350)  
-        document_management_console =  st.container(height=550)
+        respose_gen_console =  st.container(height=280)  
+        document_management_console =  st.container(height=620)
     with col2:
         chat_window =  st.container(height=500)  
         context_display_console = st.container(height=400)
     with chat_window:
         st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
-                        on_submit=query_chain,
+                        on_submit=query_chain_general_assistant,
                         key='current_input')
 
         #display the chat history so far
@@ -411,13 +481,12 @@ def main():
 
     #display the documents in the context used to come up with the answer
     with context_display_console:
-        if 'response_context' in st.session_state.keys():
-            for doc in st.session_state.response_context:
-                st.write(doc)
+        build_context_display_window()
     with respose_gen_console:
         build_chatbot_params_console()
 
     with document_management_console:
         build_doc_management_console()
+
 if __name__=='__main__':
   main()
