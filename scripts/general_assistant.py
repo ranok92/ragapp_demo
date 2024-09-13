@@ -369,8 +369,8 @@ def process_documents():
             texts = split_documents(documents)
         st.session_state.uploaded_files = []
         st.session_state.private_db.add_documents(texts)
+        st.success("File(s) added successfully!")
 
-@st.experimental_fragment
 def delete_files_from_db():
     rel_ids = []
     private_db_metadata = st.session_state.private_db._collection.get(include=['metadatas'])
@@ -384,6 +384,23 @@ def delete_files_from_db():
     if len(rel_ids):
         st.session_state.private_db._collection.delete(rel_ids)
     st.session_state.db_del_files = []
+    st.success("File(s) deleted successfully!")
+    
+
+def popover_logic():
+    if st.session_state.db_view_selected=='Public':
+        files_db = get_db_files(st.session_state.public_db)
+    else:
+        files_db = get_db_files(st.session_state.private_db)
+    AgGrid(files_db)
+
+    if st.session_state.db_view_selected=='Public':
+        pass
+    else:
+        st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
+        delete_file_button = st.button("Delete ")
+        if delete_file_button:
+            delete_files_from_db()
 
 
 @st.experimental_fragment
@@ -397,20 +414,27 @@ def build_doc_management_console():
                             '''):
         st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Document Management</h3>", unsafe_allow_html=True)
     st.session_state.uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
-    st.button("Submit documents", on_click=process_documents)
+    add_doc_button = st.button("Submit documents")
+    if add_doc_button:
+        process_documents()
     st.session_state.db_view_selected = st.selectbox("View files in Database:", ['Public', 'Private'])
-    with st.popover("View files"):
-        if st.session_state.db_view_selected=='Public':
-            files_db = get_db_files(st.session_state.public_db)
-        else:
-            files_db = get_db_files(st.session_state.private_db)
-        AgGrid(files_db)
 
-        if st.session_state.db_view_selected=='Public':
-            st.button("Cannot delete public files", on_click=delete_files_from_db, disabled=True)
-        else:
-            st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
-            st.button("Delete ", on_click=delete_files_from_db)
+    view_files =  st.popover("View files")
+    with view_files:
+        popover_logic()
+        # if st.session_state.db_view_selected=='Public':
+        #     files_db = get_db_files(st.session_state.public_db)
+        # else:
+        #     files_db = get_db_files(st.session_state.private_db)
+        # AgGrid(files_db)
+
+        # if st.session_state.db_view_selected=='Public':
+        #     pass
+        # else:
+        #     st.session_state.db_del_files = st.multiselect('Select :',options=files_db, placeholder='Choose files')
+        #     delete_file_button = st.button("Delete ")
+        #     if delete_file_button:
+        #         delete_files_from_db()
 
 @st.experimental_fragment
 def build_context_display_window():
