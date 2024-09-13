@@ -11,7 +11,7 @@ from streamlit_folium import st_folium
 from folium import JsCode
 import statistics
 #--- llm imports 
-
+import re 
 from langchain_community.llms import Ollama
 from langchain import LLMChain, PromptTemplate
 
@@ -21,13 +21,13 @@ from utils.dashboard_utils import *
 from prompts.prompt_template import *
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
-
+import datetime
 
 with open('../assets/openai_api_key.txt', 'r') as f:
     key = f.read()
 os.environ["OPENAI_API_KEY"]=key
 
-REFRESH_TIMER = 20
+REFRESH_TIMER = 2
 @st.experimental_fragment(run_every=REFRESH_TIMER)
 def get_data_anomaly() -> pd.DataFrame:
     st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url,  index_col=False)
@@ -44,7 +44,6 @@ def get_data_anomaly() -> pd.DataFrame:
         else:
             st.session_state.cumm_data_df = pd.concat([st.session_state.cumm_data_df, st.session_state.cur_data_df], ignore_index=True)
 
-    print("UNIQUE TIMESTAMPS :", st.session_state.cumm_data_df['timestamp'].unique())
 
 def get_data_full_anomaly():
     st.session_state.full_data_df = pd.read_csv(st.session_state.dataset_url)
@@ -81,7 +80,7 @@ def setup_llm_chains_anomaly():
     router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_BASIC
     )
-    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+    st.session_state.router_chain_anomaly = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
     #build the email writing chain
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
@@ -181,11 +180,11 @@ def query_chain_anomaly_assistant():
 
 
     #check if retrieval is required
-    router_samples = 3
+    router_samples = 1
     router_resp_list = []
     for i in range(router_samples):
 
-        router_resp = st.session_state.router_chain.invoke({'input': resp_string})
+        router_resp = st.session_state.router_chain_anomaly.invoke({'input': resp_string})
         print("***RESPONSE QA : ", router_resp['answer'])
         router_resp_list.append(get_key_val_from_llm_json_string(router_resp['answer'], 'response'))
     
@@ -228,8 +227,10 @@ def query_chain_anomaly_assistant():
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
+
     st.session_state.messages_anomaly.append({"speaker" : "AI",
-                                    "content": anno_result})
+                                    "content": re.sub('\$','\\$',anno_result)
+})
 
 
 @st.experimental_fragment(run_every=REFRESH_TIMER)
