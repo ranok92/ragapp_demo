@@ -122,7 +122,7 @@ def setup_llm_chains_assistant():
     router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_2
     )
-    st.session_state.router_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+    st.session_state.router_chain_assistant = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
 
     #setup the email writing chain
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
@@ -236,7 +236,7 @@ def query_chain_general_assistant():
     print("\n\n\n ****** CHAT HISTORY :", get_session_gen_assist_chat_history())
 
 
-    resp = st.session_state.router_chain.invoke({'input': resp_string})
+    resp = st.session_state.router_chain_assistant.invoke({'input': resp_string})
     print("***RESPONSE QA : ", resp['answer'])
     is_qa = get_key_val_from_llm_json_string(resp['answer'], 'response')
     
@@ -301,7 +301,8 @@ def query_chain_general_assistant():
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
     st.session_state.messages_gen_assist.append({"speaker" : "AI",
-                                    "content": anno_result})
+                                    "content": re.sub('\$','\\$',anno_result)
+})
     
 
 ################################  front end functions  ################################
