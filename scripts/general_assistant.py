@@ -316,7 +316,7 @@ def get_session_gen_assist_chat_history():
             chat_history.append(AIMessage(content=conv['content']))
     return chat_history
 
-@st.experimental_fragment
+@st.fragment
 def build_chatbot_params_console():
     with stylable_container(key='bot_param_header',
                             css_styles='''
@@ -347,7 +347,7 @@ def split_documents(documents):
     return texts
 
 
-@st.experimental_fragment
+@st.fragment
 def process_documents():
     if not st.session_state.uploaded_files:
         st.warning(f"Please upload the documents first.")
@@ -385,7 +385,7 @@ def delete_files_from_db():
         st.session_state.private_db._collection.delete(rel_ids)
     st.session_state.db_del_files = []
     st.success("File(s) deleted successfully!")
-    
+    st.rerun(scope="fragment")
 
 def popover_logic():
     if st.session_state.db_view_selected=='Public':
@@ -403,7 +403,7 @@ def popover_logic():
             delete_files_from_db()
 
 
-@st.experimental_fragment
+@st.fragment
 def build_doc_management_console():
     with stylable_container(key='doc_management_header',
                             css_styles='''
@@ -436,7 +436,7 @@ def build_doc_management_console():
         #     if delete_file_button:
         #         delete_files_from_db()
 
-@st.experimental_fragment
+@st.fragment
 def build_context_display_window():
     row_container_list = []
     if 'response_context' in st.session_state and st.session_state.response_context !="":

@@ -28,7 +28,7 @@ with open('../assets/openai_api_key.txt', 'r') as f:
 os.environ["OPENAI_API_KEY"]=key
 
 REFRESH_TIMER = 2
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def get_data_anomaly() -> pd.DataFrame:
     st.session_state.cur_data_df = pd.read_csv(st.session_state.cur_dataset_url,  index_col=False)
 
@@ -106,7 +106,7 @@ def setup_llm_chains_anomaly():
 #----------------------
 
 #----- Streamlit page building functions ------------
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def write_latest_update_time():
     st.markdown(f"<h2 style='text-align: center; color: #453030;'> Outage Tracker </h2> <p style='text-align: right'> Last Updated : {st.session_state.cur_data_df['datetime'][0]} ", unsafe_allow_html=True)
 
@@ -233,7 +233,7 @@ def query_chain_anomaly_assistant():
 })
 
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def plot_outage_occurance_linechart():
     #aggregate the anomalies by datetime
     st.markdown("<h2 style='text-align: center; color: #453030;'> Outages Registered Over Time</h2>", unsafe_allow_html=True)
@@ -252,7 +252,7 @@ def plot_outage_occurance_linechart():
     )
     st.altair_chart(ano_chart, use_container_width=True)
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def write_outages():
     t = st.session_state.timestamps[-1]
     st.markdown("<h2 style='text-align: center; color: #453030; padding: 1rem 0px'> Outage Reason </h2>", unsafe_allow_html=True)
@@ -308,7 +308,7 @@ def write_outages():
 
 # ----- Plot historic line chart for a given KPI -----
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
     st.markdown("<h2 style='text-align: center; color: blue;'> Daily Trend </h2>", unsafe_allow_html=True)
     weekly_kpi_data = get_weekly_data(st.session_state.full_data_df, historic_chart_kpi, st.session_state.timestamps[-1])
@@ -322,7 +322,7 @@ def plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax):
 
 # -----  Plot instantaneous barchart ---- 
 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def plot_instantaneous_barchart(bar_chart_kpi):
     print("CUR TImestep: ", st.session_state.timestamps[-1])
     bar_chart_max = {'co2_emissions' : 20, 'reservoir_level' : 80, 'water_flow_rate' : 3300, 'total_energy_output' : 1000}
@@ -339,7 +339,7 @@ def plot_instantaneous_barchart(bar_chart_kpi):
     st.altair_chart(realtime_bar, use_container_width=True)
     
 # --- Writing the llm summarization of current data ---- 
-@st.experimental_fragment(run_every=REFRESH_TIMER)
+@st.fragment(run_every=REFRESH_TIMER)
 def write_llm_summarization():
     if 'last_summarization_timestamp' not in st.session_state.keys():
         st.session_state.last_summarization_timestamp = None
