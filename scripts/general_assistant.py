@@ -9,7 +9,7 @@ from langchain.vectorstores import Chroma
 #import for llms
 import ollama
 from langchain_community.llms import Ollama
-
+from utils.llm_apis import LocalOllama, OllamaChain
 #import for embeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
@@ -85,8 +85,8 @@ os.makedirs(TMP_DIR, exist_ok=True)
 
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = Ollama(model='llama3.1', system='You are a helpful question answering bot.')
-    #st.session_state.llm_model_instruct = Ollama(model='llama3.1', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = LocalOllama(model='llama3.1', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = LocalOllama(model='llama3.1', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
     with open('../assets/openai_api_key.txt', 'r') as f:
         key = f.read()
     os.environ["OPENAI_API_KEY"]=key
@@ -107,27 +107,28 @@ def setup_llms_assistant():
 def setup_llm_chains_assistant():
 
     #build the conversation chain
-    st.session_state.conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
-    #st.session_state.conv_chain = LLMChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt, output_key='answer')
+    conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
+    st.session_state.conv_chain = OllamaChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt)
 
     #build the rephrase chain 
-    st.session_state.rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
+    rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
 
-    #st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_openai, prompt=rephrase_prompt)
+    st.session_state.rephrase_chain = OllamaChain(llm=st.session_state.llm_model_instruct, prompt=rephrase_prompt)
 
 
     #build the document chain
-    st.session_state.document_chain=create_stuff_documents_chain(st.session_state.llm_model_chat, prompt = DOCUMENT_CHAIN_PROMPT)
+    #st.session_state.rag_prompt = DOCUMENT_CHAIN_PROMPT
+    st.session_state.document_chain=OllamaChain(llm=st.session_state.llm_model_chat, prompt = DOCUMENT_CHAIN_PROMPT)
 
     #build the router chain
-    st.session_state.router_prompt = PromptTemplate(
+    router_prompt = PromptTemplate(
         input_variables=["input"], template=ROUTER_PROMPT_TEMPLATE_2
     )
-    #st.session_state.router_chain_assistant = LLMChain(llm=st.session_state.llm_model_instruct, prompt=router_prompt, output_key='answer')
+    st.session_state.router_chain_assistant = LLMChain(llm=st.session_state.llm_openai, prompt=router_prompt)
 
     #setup the email writing chain
-    st.session_state.email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
-    #st.session_state.email_chain = LLMChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt, output_key='answer')    
+    email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
+    st.session_state.email_chain = OllamaChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt)    
 
 
 def load_vectordbs():
@@ -230,26 +231,19 @@ def query_chain_general_assistant():
     #use chains
 
     #check if retrieval is required
-    input_dict = {'input': query_text, 'chat_history': get_session_gen_assist_chat_history()}
-    rephrase_text = st.session_state.rephrase_prompt.invoke(input_dict).text
+    chat_history = get_session_gen_assist_chat_history()
+    rephrase_resp = st.session_state.rephrase_chain.invoke({'input': query_text, 'chat_history': chat_history})
+    print("****************Rephrase response*********************", rephrase_resp)
 
-    resp = ollama.generate(model='llama3.1', 
-                system='You are a helpful question answering bot.', 
-                prompt=rephrase_text)
-    
-    print("****************Rephrase response*********************", resp['response'])
+    resp_string = get_key_val_from_llm_json_string(rephrase_resp, 'rephrased_input')
 
-    resp_string = get_key_val_from_llm_json_string(resp['response'], 'rephrased_input')
+    router_resp = st.session_state.router_chain_assistant.invoke({'input': resp_string})
 
-    router_text = st.session_state.router_prompt.invoke(input_dict).text
 
-    resp = ollama.generate(model='llama3.1', 
-                system='You are a helpful question answering bot.', 
-                prompt=router_text)
-    print("****************Router response*********************", resp['response'])
+    print("****************Router response*********************", router_resp['text'])
 
-    print("***RESPONSE QA : ", resp['response'])
-    is_qa = get_key_val_from_llm_json_string(resp['response'], 'response')
+    print("***RESPONSE QA : ", router_resp['text'])
+    is_qa = get_key_val_from_llm_json_string(router_resp['text'], 'response')
     
     
     if is_qa.strip().lower()=='qa':
@@ -261,15 +255,16 @@ def query_chain_general_assistant():
         if st.session_state.use_kb:
             docs = get_relevant_documents_from_dbs(resp_string)
             print("\n\n\n************ Docs in the context :", docs)
-        #get answer using relevant documents and question
-        result = st.session_state.document_chain.invoke({'input':resp_string, 
+        #get answer using relevant documents and question        
+        rag_response = st.session_state.document_chain.invoke({'input':resp_string, 
                                                 'context':docs})
         
+        print("****************RAG response*********************", rag_response)
 
         #annotate the response with hallucination information
         if st.session_state.use_kb:
             regex = re.compile("[^a-zA-Z0-9.,!' $\n\-():]")
-            result_clean = regex.sub('', result)
+            result_clean = regex.sub('', rag_response)
             start_time = time.time()
             #resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
             if st.session_state.use_hallu_detect:
@@ -280,9 +275,9 @@ def query_chain_general_assistant():
                 # print("RESULT ***************", result)
                 # print("RESULT ***************", anno_result)
             else:
-                anno_result = result
+                anno_result = rag_response
         else:
-            anno_result = result
+            anno_result = rag_response
         #result = anno_result
    
         #anno_result = result
@@ -290,25 +285,21 @@ def query_chain_general_assistant():
         st.session_state.response_context = docs
 
     if is_qa.strip().lower()=='conv':
-        conv_text = st.session_state.conv_prompt.invoke(input_dict).text
-        result = ollama.generate(model='llama3.1', 
-                system='You are a helpful question answering bot.', 
-                prompt=conv_text)
-        print("****************Conv response*********************", result['response'])
+        conv_resp = st.session_state.conv_chain.invoke({'input': query_text, 'chat_history': chat_history})
+        print("****************Conv response*********************", conv_resp)
 
-        anno_result = result['response']
-        st.session_state.response = result
+        anno_result = conv_resp
+        st.session_state.response = conv_resp
         st.session_state.response_context = ""    
     
 
     if is_qa.strip().lower()=='writing':
 
-        email_text = st.session_state.email_prompt.invoke({'input':resp_string}).text
-        result = ollama.generate(model='llama3.1', 
-                system='You are a helpful question answering bot.', 
-                prompt=email_text)
-        anno_result = result['response']
-        st.session_state.response = result
+        email_resp = st.session_state.email_chain.invoke({'input':resp_string})
+        print("****************Conv response*********************", email_resp)
+
+        anno_result = email_resp
+        st.session_state.response = email_resp
         st.session_state.response_context = ""    
     
     #save the query in the chat history
@@ -524,6 +515,7 @@ def main():
         with st.container(height=400):
             for msg in st.session_state.messages_gen_assist:
                 st.chat_message(msg['speaker']).markdown(msg['content'])
+
 
     #display the documents in the context used to come up with the answer
     with context_display_console:
