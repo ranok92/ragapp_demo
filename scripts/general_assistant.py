@@ -113,7 +113,7 @@ def setup_llm_chains_assistant():
     #build the rephrase chain 
     rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
 
-    st.session_state.rephrase_chain = OllamaChain(llm=st.session_state.llm_model_instruct, prompt=rephrase_prompt)
+    st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_openai, prompt=rephrase_prompt)
 
 
     #build the document chain
@@ -233,9 +233,9 @@ def query_chain_general_assistant():
     #check if retrieval is required
     chat_history = get_session_gen_assist_chat_history()
     rephrase_resp = st.session_state.rephrase_chain.invoke({'input': query_text, 'chat_history': chat_history})
-    print("****************Rephrase response*********************", rephrase_resp)
+    print("****************Rephrase response*********************", rephrase_resp['text'])
 
-    resp_string = get_key_val_from_llm_json_string(rephrase_resp, 'rephrased_input')
+    resp_string = get_key_val_from_llm_json_string(rephrase_resp['text'], 'rephrased_input')
 
     router_resp = st.session_state.router_chain_assistant.invoke({'input': resp_string})
 
