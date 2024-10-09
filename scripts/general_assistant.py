@@ -82,7 +82,7 @@ os.makedirs(TMP_DIR, exist_ok=True)
 # def update_vector_db():
 #     st.session_state.vector_db = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), embedding_function=HuggingFaceEmbeddings())
  
-
+@st.cache_resource
 def setup_llms_assistant():
 
     st.session_state.llm_model_chat = LocalOllama(model='llama3.1', system='You are a helpful question answering bot.')
@@ -103,7 +103,7 @@ def setup_llms_assistant():
     # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
     st.session_state.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2") #chroma default embedding model
 
-
+@st.cache_resource
 def setup_llm_chains_assistant():
 
     #build the conversation chain
@@ -130,7 +130,7 @@ def setup_llm_chains_assistant():
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
     st.session_state.email_chain = OllamaChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt)    
 
-
+@st.cache_resource
 def load_vectordbs():
     st.session_state.private_db = Chroma(persist_directory=VECTOR_DB_PATHS['Private'].as_posix(), 
                                          embedding_function=HuggingFaceEmbeddings())
@@ -487,8 +487,10 @@ def main():
         layout="wide",
     )
     st.title(
-        'Helper bot'
+        'General Assistance'
     )
+    st.html("../css/dashboard_styles.html")
+
     setup_llms_assistant()
     setup_llm_chains_assistant()
     load_vectordbs()    
