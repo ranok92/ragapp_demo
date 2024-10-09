@@ -85,8 +85,8 @@ os.makedirs(TMP_DIR, exist_ok=True)
 @st.cache_resource
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = LocalOllama(model='llama3.1', system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = LocalOllama(model='llama3.1', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = LocalOllama(model='llama3.2', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = LocalOllama(model='llama3.2', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
     with open('../assets/openai_api_key.txt', 'r') as f:
         key = f.read()
     os.environ["OPENAI_API_KEY"]=key
@@ -336,6 +336,7 @@ def build_chatbot_params_console():
         st.markdown("<h3 style='font-family: sans-serif; text-align: center; color: black;'> Generation Parameters</h3>", unsafe_allow_html=True)
     st.session_state.use_kb = st.toggle("Use Knowledge base")
     st.session_state.use_hallu_detect = st.toggle("Check for hallucination")
+    st.session_state.show_supporting_docs = st.toggle("Show supporting documents")
     k_list = [3,4,5,6,7]
     st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
 
@@ -505,26 +506,37 @@ def main():
     with col1:
         respose_gen_console =  st.container(height=280, border=False)  
         document_management_console =  st.container(height=620,  border=False)
+    
+    with respose_gen_console:
+        build_chatbot_params_console()    
+
     with col2:
-        chat_window =  st.container(height=500,  border=False)  
-        context_display_console = st.container(height=400,  border=False)  
+        if st.session_state.show_supporting_docs:
+            chat_window =  st.container(height=500,  border=False)  
+            context_display_console = st.container(height=400,  border=True)  
+        else:
+            chat_window =  st.container(height=900,  border=True)  
+
     with chat_window:
         st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
                         on_submit=query_chain_general_assistant,
                         key='current_input')
 
         #display the chat history so far
-        with st.container(height=400):
-            for msg in st.session_state.messages_gen_assist:
-                st.chat_message(msg['speaker']).markdown(msg['content'])
+        if st.session_state.show_supporting_docs:
+            with st.container(height=400):
+                for msg in st.session_state.messages_gen_assist:
+                    st.chat_message(msg['speaker']).markdown(msg['content'])
+        else:
+            with st.container(height=800):
+                for msg in st.session_state.messages_gen_assist:
+                    st.chat_message(msg['speaker']).markdown(msg['content'])
 
+    #display the documents in the context used to come up with the answer\
 
-    #display the documents in the context used to come up with the answer
-    with context_display_console:
-        build_context_display_window()
-    with respose_gen_console:
-        build_chatbot_params_console()
-
+    if st.session_state.show_supporting_docs:
+        with context_display_console:
+                build_context_display_window()
     with document_management_console:
         build_doc_management_console()
 
