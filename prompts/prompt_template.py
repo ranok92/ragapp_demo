@@ -292,6 +292,15 @@ DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
+SAMPLE_QUESTION_GENERATION_PROMPT_GA = '''
+Given the context and the latest user question, \
+ your task is to come up with two to three questions that are similar to the question asked by the \
+ user and are related to the data in the context. The questions MUST be answerable based on the context. \
+ Context : {context}
+ Current user question: {input}
+'''
+
+
 RAG_PROMPT_TEMPLATE =  "Answer the user's questions based on the context provided.\n \
          If you don't know the answer just say you dont know. Do not try to come up with something. \n \
          Keep your answer brief and to the point. \n\n \
