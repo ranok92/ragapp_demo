@@ -24,6 +24,7 @@ from langchain.chains import LLMChain
 from langchain_core.messages import HumanMessage, AIMessage
 from prompts.prompt_template import *
 from utils.utils import *
+from utils.hallucination_detection import CosineDetector
 import ipdb 
 import glob
 import warnings
@@ -40,7 +41,7 @@ from streamlit_extras.stylable_container import stylable_container
 from st_aggrid import AgGrid
 import pandas as pd
 import re 
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -108,7 +109,8 @@ def setup_llm_chains_assistant():
 
     #build the conversation chain
     conv_prompt = PromptTemplate(input_variables=['input', 'history'], template=CONV_PROMPT_TEMPLATE)
-    st.session_state.conv_chain = OllamaChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt)
+    #st.session_state.conv_chain = OllamaChain(llm=st.session_state.llm_model_chat, prompt=conv_prompt)
+    st.session_state.conv_chain_ga = LLMChain(llm=st.session_state.llm_openai, prompt=conv_prompt)
 
     #build the rephrase chain 
     rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
@@ -118,7 +120,10 @@ def setup_llm_chains_assistant():
 
     #build the document chain
     #st.session_state.rag_prompt = DOCUMENT_CHAIN_PROMPT
-    st.session_state.document_chain=OllamaChain(llm=st.session_state.llm_model_chat, prompt = DOCUMENT_CHAIN_PROMPT)
+    st.session_state.document_chain=LLMChain(llm=st.session_state.llm_openai,  prompt = DOCUMENT_CHAIN_PROMPT)
+    sample_q_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=SAMPLE_QUESTION_GENERATION_PROMPT_GA)
+
+    st.session_state.question_sampler_chain=LLMChain(llm=st.session_state.llm_openai,  prompt = sample_q_prompt)
 
     #build the router chain
     router_prompt = PromptTemplate(
@@ -128,7 +133,7 @@ def setup_llm_chains_assistant():
 
     #setup the email writing chain
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
-    st.session_state.email_chain = OllamaChain(llm=st.session_state.llm_model_instruct, prompt=email_prompt)    
+    st.session_state.email_chain = LLMChain(llm=st.session_state.llm_openai, prompt=email_prompt)    
 
 @st.cache_resource
 def load_vectordbs():
@@ -141,6 +146,11 @@ def load_vectordbs():
                                         embedding_function=HuggingFaceEmbeddings())
     
     st.session_state.public_db_docs = set([elem['source'] for elem in st.session_state.public_db.get(include=['metadatas'])['metadatas']])
+
+@st.cache_resource 
+def load_hallucination_detector():
+    embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
+    st.session_state.hallucination_detector = CosineDetector(embedding_model)
 
 
 def get_db_files(db):
@@ -204,22 +214,13 @@ def check_sentence_hallucination_cosine_similarity(
 def annotate_response(reponse_sentences, scores, hallu_method='selfcheckgpt'):
     anno_result = ""
 
-    if hallu_method=='selfcheckgpt':
-        for sent, score in zip(reponse_sentences, scores):
-            if score >= 0.6: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is
-                sent = f":red-background[{sent}]"
-            if score > 0.35 and score < 0.6:
-                sent = f":orange-background[{sent}]"
+    for sent, score in zip(reponse_sentences, scores):
+        if score < 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
+            sent = f":red-background[{sent}]"
+        if score > 0.25 and score < 0.5:
+            sent = f":violet-background[{sent}]"
 
-            anno_result += sent  
-    if hallu_method=='cosine_similarity':
-        for sent, score in zip(reponse_sentences, scores):
-            if score < 0.5: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
-                sent = f":red-background[{sent}]"
-            if score > 0.5 and score < 0.65:
-                sent = f":orange-background[{sent}]"
-
-            anno_result += sent 
+        anno_result += sent 
     return anno_result
 
 
@@ -257,21 +258,29 @@ def query_chain_general_assistant():
             print("\n\n\n************ Docs in the context :", docs)
         #get answer using relevant documents and question        
         rag_response = st.session_state.document_chain.invoke({'input':resp_string, 
-                                                'context':docs})
+                                                'context':docs})['text']
+        
+        sample_questions=''
+        if st.session_state.use_kb and st.session_state.generate_sample_questions:
+            sample_questions = st.session_state.question_sampler_chain.invoke({'input': resp_string, 'context': docs})['text']
+            sample_questions = '\n Other related questions include: \n'+sample_questions
         
         print("****************RAG response*********************", rag_response)
+        print("*****************Sample questions***************", sample_questions)
 
         #annotate the response with hallucination information
         if st.session_state.use_kb:
             regex = re.compile("[^a-zA-Z0-9.,!' $\n\-():]")
             result_clean = regex.sub('', rag_response)
             start_time = time.time()
+            
             #resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
             if st.session_state.use_hallu_detect:
-                resp_sent, scores = check_sentence_hallucination_cosine_similarity(docs, result_clean)
+                resp_sent, scores = st.session_state.hallucination_detector.check_hallucination('', result_clean, docs)
                 print("\n\n\n Execution time : ", time.time()-start_time)
                 anno_result = annotate_response(resp_sent, scores, 'cosine_similarity')
-                # print("Scores ***************", scores)
+                for s, score in zip(resp_sent, scores):
+                    print(f"*****************Sentence: {s} \n Scores ***************: {s}")
                 # print("RESULT ***************", result)
                 # print("RESULT ***************", anno_result)
             else:
@@ -281,11 +290,12 @@ def query_chain_general_assistant():
         #result = anno_result
    
         #anno_result = result
+        anno_result = anno_result+'\n'+sample_questions
         st.session_state.response = anno_result
         st.session_state.response_context = docs
 
     if is_qa.strip().lower()=='conv':
-        conv_resp = st.session_state.conv_chain.invoke({'input': query_text, 'chat_history': chat_history})
+        conv_resp = st.session_state.conv_chain_ga.invoke({'input': query_text, 'chat_history': chat_history})['text']
         print("****************Conv response*********************", conv_resp)
 
         anno_result = conv_resp
@@ -295,7 +305,7 @@ def query_chain_general_assistant():
 
     if is_qa.strip().lower()=='writing':
 
-        email_resp = st.session_state.email_chain.invoke({'input':resp_string})
+        email_resp = st.session_state.email_chain.invoke({'input':resp_string})['text']
         print("****************Conv response*********************", email_resp)
 
         anno_result = email_resp
@@ -337,6 +347,7 @@ def build_chatbot_params_console():
     st.session_state.use_kb = st.toggle("Use Knowledge base")
     st.session_state.use_hallu_detect = st.toggle("Check for hallucination")
     st.session_state.show_supporting_docs = st.toggle("Show supporting documents")
+    st.session_state.generate_sample_questions = st.toggle("Suggest related questions")
     k_list = [3,4,5,6,7]
     st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
 
@@ -455,7 +466,7 @@ def build_context_display_window():
             row_container_list.append(stylable_container(key='context_data',
                             css_styles='''
                             {
-                               background-color:  #e1e1ea;
+                               background-color:  #f4f7ff;
                                padding: 5px;
                                height: 65px;
                                border-radius: 10px;
@@ -495,6 +506,8 @@ def main():
     setup_llms_assistant()
     setup_llm_chains_assistant()
     load_vectordbs()    
+    load_hallucination_detector()
+
 # App logic
     #uploaded_file = st.session_state.source_docs
 
@@ -504,8 +517,8 @@ def main():
 
     col1, col2 = st.columns([0.3,0.7], gap="small")
     with col1:
-        respose_gen_console =  st.container(height=280, border=False)  
-        document_management_console =  st.container(height=620,  border=False)
+        respose_gen_console =  st.container(height=320, border=False)  
+        document_management_console =  st.container(height=580,  border=False)
     
     with respose_gen_console:
         build_chatbot_params_console()    
@@ -533,7 +546,7 @@ def main():
                     st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer\
-
+    
     if st.session_state.show_supporting_docs:
         with context_display_console:
                 build_context_display_window()
