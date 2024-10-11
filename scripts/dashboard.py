@@ -65,31 +65,48 @@ def build_doc_assistant_tab():
     setup_llms_assistant()
     setup_llm_chains_assistant()
     load_vectordbs()    
+    load_hallucination_detector()
+
     if "messages_gen_assist" not in st.session_state:
         st.session_state.messages_gen_assist = []
 
     col1, col2 = st.columns([0.3,0.7], gap="small")
     with col1:
-        respose_gen_console =  st.container(height=280, border=True)
-        document_management_console =  st.container(height=620, border=True)
+        respose_gen_console =  st.container(height=350, border=True)
+        document_management_console =  st.container(height=550, border=True)
+
+
+    with respose_gen_console:
+        build_chatbot_params_console()
+
     with col2:
-        chat_window =  st.container(height=500)  
-        context_display_console = st.container(height=400)
+        if st.session_state.show_supporting_docs:
+            chat_window =  st.container(height=500,  border=False)  
+            context_display_console = st.container(height=400,  border=True)  
+        else:
+            chat_window =  st.container(height=900,  border=True)  
+
+
     with chat_window:
         st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
                         on_submit=query_chain_general_assistant,
                         key='current_input')
 
         #display the chat history so far
-        with st.container(height=400):
-            for msg in st.session_state.messages_gen_assist:
-                st.chat_message(msg['speaker']).markdown(msg['content'])
+        if st.session_state.show_supporting_docs:
+            with st.container(height=400):
+                for msg in st.session_state.messages_gen_assist:
+                    st.chat_message(msg['speaker']).markdown(msg['content'])
+        else:
+            with st.container(height=800):
+                for msg in st.session_state.messages_gen_assist:
+                    st.chat_message(msg['speaker']).markdown(msg['content'])
 
     #display the documents in the context used to come up with the answer
-    with context_display_console:
-        build_context_display_window()
-    with respose_gen_console:
-        build_chatbot_params_console()
+
+    if st.session_state.show_supporting_docs:
+        with context_display_console:
+                build_context_display_window()
 
     with document_management_console:
         build_doc_management_console()
@@ -213,7 +230,7 @@ def main():
                 authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Energy Forecasting', ':headphones: Assistant'])
+            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Forecasting', ':headphones: Assistant'])
 
             #---- SET UP THE PAGE STRUCTURE ---
 
