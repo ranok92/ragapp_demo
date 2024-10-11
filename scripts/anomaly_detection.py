@@ -108,7 +108,7 @@ def setup_llm_chains_anomaly():
 #----- Streamlit page building functions ------------
 @st.fragment(run_every=REFRESH_TIMER)
 def write_latest_update_time():
-    st.markdown(f"<h2 style='text-align: center; color: #453030;'> Outage Tracker </h2> <p style='text-align: right'> Last Updated : {st.session_state.cur_data_df['datetime'][0]} ", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center; color: #453030;'> Outage Tracker </h2>", unsafe_allow_html=True)
 
 
 def draw_realtime_map():
@@ -263,46 +263,46 @@ def write_outages():
     with row1:
         ano_col1, ano_col2  = st.columns(2)
         with ano_col1:
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
 
             env_factors = outage_counts_df[outage_counts_df['outage_reason']=='Environmental Factors']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Env. Factors</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {env_factors} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {env_factors} </h6>", unsafe_allow_html=True)
         with ano_col2:
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
             eqp_fail = outage_counts_df[outage_counts_df['outage_reason']=='Equipment Failure']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Equipment Failure</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {eqp_fail} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {eqp_fail} </h6>", unsafe_allow_html=True)
     with row2:
 
         ano_col3, ano_col4 = st.columns(2)
         with ano_col3:
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
 
             ext_factors = outage_counts_df[outage_counts_df['outage_reason']=='External Factors']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Ext. Factors</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {ext_factors} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {ext_factors} </h6>", unsafe_allow_html=True)
         with ano_col4:
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
 
             nat_cause = outage_counts_df[outage_counts_df['outage_reason']=='Natural Cause']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Nat. Causes</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {nat_cause} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {nat_cause} </h6>", unsafe_allow_html=True)
 
     with row3:
         ano_col5, ano_col6 = st.columns(2)
         with ano_col5:
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
 
             sys_repair = outage_counts_df[outage_counts_df['outage_reason']=='Power System Repair']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Repair</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {sys_repair} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {sys_repair} </h6>", unsafe_allow_html=True)
         with ano_col6:
 
-            st.html(f'<span class="anomaly_counter"></span>')
+            #st.html(f'<span class="anomaly_counter"></span>')
             sys_improvement = outage_counts_df[outage_counts_df['outage_reason']=='System Improvement']['outage_counts'].iloc[0]
             st.markdown("<h5 style='text-align: center; color: black;'>Improvement</h5>", unsafe_allow_html=True)
-            st.write(f"<h6> {sys_improvement} </h6>", unsafe_allow_html=True)
+            st.write(f"<h6 style='text-align: center'> {sys_improvement} </h6>", unsafe_allow_html=True)
 
 #---- Methods not being used for now ----
 
