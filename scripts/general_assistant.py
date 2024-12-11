@@ -45,10 +45,9 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 nlp = spacy.load("en_core_web_sm")
 
-VECTOR_DB_PATHS = {
-                'Public' : Path('../vectorstores/energy_public'), 
-                'Private' : Path('../vectorstores/energy_private'),
-                    }
+
+VECTOR_DB_PATHS = '../vectorstores/finance_QA'
+
 
 # LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
 
@@ -114,9 +113,7 @@ def setup_llm_chains_assistant():
 
     #build the rephrase chain 
     rephrase_prompt = PromptTemplate(input_variables=['input', 'chat_history'], template=RETRIEVE_REPHRASE_PROMPT_GA)
-
     st.session_state.rephrase_chain = LLMChain(llm=st.session_state.llm_openai, prompt=rephrase_prompt)
-
 
     #build the document chain
     #st.session_state.rag_prompt = DOCUMENT_CHAIN_PROMPT
@@ -135,17 +132,12 @@ def setup_llm_chains_assistant():
     email_prompt = PromptTemplate(input_variables=['input'], template=EMAIL_PROMPT_TEMPLATE)
     st.session_state.email_chain = LLMChain(llm=st.session_state.llm_openai, prompt=email_prompt)    
 
+
 @st.cache_resource
 def load_vectordbs():
-    st.session_state.private_db = Chroma(persist_directory=VECTOR_DB_PATHS['Private'].as_posix(), 
+    st.session_state.finance_db = Chroma(persist_directory=VECTOR_DB_PATHS.as_posix(), 
                                          embedding_function=HuggingFaceEmbeddings())
     
-    st.session_state.private_db_docs = set([elem['source'] for elem in st.session_state.private_db.get(include=['metadatas'])['metadatas']])
-
-    st.session_state.public_db = Chroma(persist_directory=VECTOR_DB_PATHS['Public'].as_posix(), 
-                                        embedding_function=HuggingFaceEmbeddings())
-    
-    st.session_state.public_db_docs = set([elem['source'] for elem in st.session_state.public_db.get(include=['metadatas'])['metadatas']])
 
 @st.cache_resource 
 def load_hallucination_detector():
@@ -160,17 +152,10 @@ def get_db_files(db):
 
 
 def get_relevant_documents_from_dbs(query_text):
-    rel_docs_and_score_pvt = st.session_state.private_db.similarity_search_with_score(query_text, 
+    rel_docs_and_score = st.session_state.finance_db.similarity_search_with_score(query_text, 
                                                                         k=st.session_state.search_k,
                                                                         )
-    rel_docs_and_score_pub = st.session_state.public_db.similarity_search_with_score(query_text, 
-                                                                    k=st.session_state.search_k,
-                                                                    )
-    docs_and_scores = rel_docs_and_score_pub + rel_docs_and_score_pvt
-
-
-    docs_and_scores.sort(key=lambda x:x[1])
-    return [item[0] for item in docs_and_scores[0:st.session_state.search_k]]
+    return rel_docs_and_score
 
 
 def check_sentence_hallucination(query, context, response, sample_size=5):
