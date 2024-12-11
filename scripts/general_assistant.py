@@ -46,7 +46,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 nlp = spacy.load("en_core_web_sm")
 
 
-VECTOR_DB_PATHS = '../vectorstores/finance_QA'
+VECTOR_DB_PATHS = Path('../vectorstores/finance_QA')
 
 
 # LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
@@ -155,7 +155,7 @@ def get_relevant_documents_from_dbs(query_text):
     rel_docs_and_score = st.session_state.finance_db.similarity_search_with_score(query_text, 
                                                                         k=st.session_state.search_k,
                                                                         )
-    return rel_docs_and_score
+    return [tup[0] for tup in rel_docs_and_score]
 
 
 def check_sentence_hallucination(query, context, response, sample_size=5):
@@ -165,7 +165,6 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
     '''
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     selfcheck_nli = SelfCheckNLI(device=device) # set device to 'cuda' if GPU is available
-
     sample_responses = []
     #generate sample answers
     for i in range(sample_size):
@@ -465,11 +464,8 @@ def build_context_display_window():
 
             context_metadata = context_doc.metadata
             with row_container_list[i]:
-                context_disp_col, context_disp_col2 = st.columns([0.8, 0.2])
+                context_disp_col2 = st.container()
 
-                with context_disp_col:
-                    data_source = context_metadata['source'].split('\\')[-1]
-                    st.markdown(f"<p style='font-size: 1.2em'> <b>Source: </b> {data_source} &nbsp &nbsp &nbsp <b>Page: </b> {context_metadata['page']}</p>",  unsafe_allow_html=True)
                 with context_disp_col2:
                     with st.popover("View page contents"):
                         st.write(context_doc.page_content)
