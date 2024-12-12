@@ -332,8 +332,8 @@ def build_chatbot_params_console():
     st.session_state.use_hallu_detect = st.toggle("Check for hallucination")
     st.session_state.show_supporting_docs = st.toggle("Show supporting documents")
     st.session_state.generate_sample_questions = st.toggle("Suggest related questions")
-    k_list = [3,4,5,6,7]
-    st.session_state.search_k = st.selectbox('No. of documents in context:', k_list)
+    k_list = [5,6,7,8,9]
+    st.session_state.search_k = st.selectbox('No. of documents in context:', k_list, index = len(k_list)-1)
 
 
 def load_documents(filepaths):
@@ -531,8 +531,8 @@ def main():
     if st.session_state.show_supporting_docs:
         with context_display_console:
                 build_context_display_window()
-    with document_management_console:
-        build_doc_management_console()
+    # with document_management_console:
+    #     build_doc_management_console()
 
 if __name__=='__main__':
   main()
