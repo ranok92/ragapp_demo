@@ -118,8 +118,10 @@ def build_forecast_tab():
     setup_llms_forecast()
     setup_llm_chains_forecast()
     st.session_state.full_forecast_data_df = get_data_forecast()
-    plant_names = st.session_state.full_forecast_data_df['name'].unique()
-    pred_linechart_kpi = 'total_energy_output'
+    plant_names = st.session_state.full_forecast_data_df['street_name'].unique()
+    day_of_week = st.session_state.full_forecast_data_df['day'].unique()
+
+    pred_linechart_kpi = 'load (kw)'
     pred_df = None
     #design the UI
     with stylable_container(
@@ -138,12 +140,12 @@ def build_forecast_tab():
     col1, col2, = st.columns([0.27, 0.73])
     with col1:
         param_form_container = st.container(height=800, border=True)
-        run_eval_container = st.container(height=250, border=True)
+        run_eval_container = st.container(height=340, border=True)
 
     with col2:
-        pred_stats_container = st.container(height=280, border=True)
+        pred_stats_container = st.container(height=340, border=True)
         
-        pred_plot_container = st.container(height=770, border=True)
+        pred_plot_container = st.container(height=800, border=True)
 
 
         with pred_plot_container:
@@ -162,10 +164,12 @@ def build_forecast_tab():
             with st.form("Evaluate on ", border=False):
                 st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
                 plant_name = st.selectbox('Select Plant', plant_names)
+                day = st.selectbox('Select Day', day_of_week)
+
                 predict_button = st.form_submit_button("Run Predition")
             if predict_button:
                 with pred_plot_container:
-                    pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
+                    pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
 
     with col2:
             with pred_stats_container:
@@ -184,23 +188,18 @@ def main():
     #st.markdown(page_bg_img, unsafe_allow_html=True)
     # ----------------------------------
 
-
-    #--- Data for anomaly_detection tab  ----
-    st.session_state.dataset_url = "../data/dashboard/outage_monitoring_data.csv"
-    st.session_state.cur_dataset_url = "../data/dashboard/outage_monitoring_data_per_hr.csv"
-
     #--- Data for forecasting tab ----
-    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
+    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days.csv"
 
     # read csv from a URL
 
-    get_data_anomaly()
-    get_data_full_anomaly()
-    # ----------------------------
-    setup_llms_anomaly()
-    setup_llm_chains_anomaly()
+    # get_data_anomaly()
+    # get_data_full_anomaly()
+    # # ----------------------------
+    # setup_llms_anomaly()
+    # setup_llm_chains_anomaly()
 
-    st.title("DecisionGPT: Monitoring & Assistance")
+    st.title("FinanceGPT: Forecasting & Support")
 
 
     if 'count' not in st.session_state:
@@ -230,60 +229,60 @@ def main():
                 authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            grid_overview_tab, forecast_tab, doc_assist_tab = st.tabs([':bar_chart: Anomaly Detection', ':factory: Forecasting', ':headphones: Assistant'])
+            forecast_tab, doc_assist_tab = st.tabs([':chart_with_upwards_trend: Forecasting', ':headphones: Assistant'])
 
             #---- SET UP THE PAGE STRUCTURE ---
 
-            with grid_overview_tab:
-                #create the header container
-                header_container =  stylable_container(key='anomaly_header',
-                                        css_styles=''' 
-                                        {
-                                            text-align: center;
-                                            background: #4b6cb7;
-                                            color: white;
-                                            border-radius: 10px;
-                                        }
-                                        ''')
-                map_and_chat_container = st.container(height=700, border=False)
-                grid_overview_container = st.container(height=550, border=False)
+            # with grid_overview_tab:
+            #     #create the header container
+            #     header_container =  stylable_container(key='anomaly_header',
+            #                             css_styles=''' 
+            #                             {
+            #                                 text-align: center;
+            #                                 background: #4b6cb7;
+            #                                 color: white;
+            #                                 border-radius: 10px;
+            #                             }
+            #                             ''')
+            #     map_and_chat_container = st.container(height=700, border=False)
+            #     grid_overview_container = st.container(height=550, border=False)
                 
-                with header_container:
-                    st.markdown("<h2 style= 'text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
+            #     with header_container:
+            #         st.markdown("<h2 style= 'text-align: center; color: white;'> Anomaly Detection Dashboard</h2>", unsafe_allow_html=True)
 
-                with map_and_chat_container:
-                    map_col, chat_col = st.columns([0.7, 0.3])
+            #     with map_and_chat_container:
+            #         map_col, chat_col = st.columns([0.7, 0.3])
 
-                    with map_col:
-                        write_latest_update_time()
-                        draw_realtime_map()
-                    with chat_col:
-                        st.markdown("<h2 style='text-align: center; color: #453030;'> Assistant </h2>", unsafe_allow_html=True)
-                        build_chat_window_anomaly()
+            #         with map_col:
+            #             write_latest_update_time()
+            #             draw_realtime_map()
+            #         with chat_col:
+            #             st.markdown("<h2 style='text-align: center; color: #453030;'> Assistant </h2>", unsafe_allow_html=True)
+            #             build_chat_window_anomaly()
 
 
-                with grid_overview_container:
+            #     with grid_overview_container:
 
-                    # create two columns for charts
-                    fig_col1, fig_col2 = st.columns([0.7,0.3])
-                    with fig_col1:
-                        #line chart over dayc
-                        #plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
-                        plot_outage_occurance_linechart()
-                    with fig_col2:
-                        #barchart with instantaneous readings
-                        write_outages()
+            #         # create two columns for charts
+            #         fig_col1, fig_col2 = st.columns([0.7,0.3])
+            #         with fig_col1:
+            #             #line chart over dayc
+            #             #plot_historic_line_chart(historic_chart_kpi, df_historic_weekly_minmax)
+            #             plot_outage_occurance_linechart()
+            #         with fig_col2:
+            #             #barchart with instantaneous readings
+            #             write_outages()
 
-                # with grid_overview_row2.container(height=250, border=True):
+            #     # with grid_overview_row2.container(height=250, border=True):
                     
-                #     anomaly_col, summary_col = st.columns(2, gap='small')
+            #     #     anomaly_col, summary_col = st.columns(2, gap='small')
 
-                #     with anomaly_col:
-                #         write_anomalies()
+            #     #     with anomaly_col:
+            #     #         write_anomalies()
                         
-                #     with summary_col.container(height = 220, border=True):
-                #         #write_llm_summarization()
-                #         pass
+            #     #     with summary_col.container(height = 220, border=True):
+            #     #         #write_llm_summarization()
+            #     #         pass
 
             with forecast_tab:
                 build_forecast_tab()
