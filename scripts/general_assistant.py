@@ -472,17 +472,9 @@ def build_context_display_window():
 
             i+=1
 
-def main():
-    # page title
-    st.set_page_config(
-        page_title="EnergyGPT Dashboard",
-        page_icon="✅",
-        layout="wide",
-    )
-    st.title(
-        'General Assistance'
-    )
-    st.html("../css/dashboard_styles.html")
+
+
+def build_main_page_general_assistant():
 
     setup_llms_assistant()
     setup_llm_chains_assistant()
@@ -533,6 +525,21 @@ def main():
                 build_context_display_window()
     # with document_management_console:
     #     build_doc_management_console()
+
+
+def main():
+    # page title
+    st.set_page_config(
+        page_title="EnergyGPT Dashboard",
+        page_icon="✅",
+        layout="wide",
+    )
+    st.title(
+        'General Assistance'
+    )
+    st.html("../css/dashboard_styles.html")
+    build_main_page_general_assistant()
+    
 
 if __name__=='__main__':
   main()
