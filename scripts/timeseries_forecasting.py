@@ -239,13 +239,16 @@ def build_param_selection_form():
             st.session_state.timeseries_form_info['learning_rate_selected'] = learning_rate
 
    
-def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
+def plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi):
 
-    timesteps = 167
+    timesteps = 23
     t= 0
-    plant_power_data_predict_mean = st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_mean']
-    plant_power_data_predict_std = st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}_predict_std']
-    kpi_data = list(st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}'])[0:t+1]
+    plant_power_data_predict_mean = st.session_state.full_forecast_data_df[(st.session_state.full_forecast_data_df['street_name']==plant_name) & \
+                                                                           (st.session_state.full_forecast_data_df['day']==day)][f'{pred_linechart_kpi}_predict_mean']
+    plant_power_data_predict_std = st.session_state.full_forecast_data_df[(st.session_state.full_forecast_data_df['street_name']==plant_name) & \
+                                                                          (st.session_state.full_forecast_data_df['day']==day)][f'{pred_linechart_kpi}_predict_std']
+    kpi_data = list(st.session_state.full_forecast_data_df[(st.session_state.full_forecast_data_df['street_name']==plant_name) & \
+                                                           (st.session_state.full_forecast_data_df['day']==day)][f'{pred_linechart_kpi}'])[0:t+1]
     #kpi_data = []
 
     power_pred_df = pd.DataFrame()
@@ -253,7 +256,8 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     #current data
     kpi_data.extend([float("NaN")]*(timesteps-t))
-    power_pred_df[f'{pred_linechart_kpi}'] = list(st.session_state.full_forecast_data_df[st.session_state.full_forecast_data_df['name']==plant_name][f'{pred_linechart_kpi}'])
+    power_pred_df[f'{pred_linechart_kpi}'] = list(st.session_state.full_forecast_data_df[(st.session_state.full_forecast_data_df['street_name']==plant_name) & \
+                                                                                        (st.session_state.full_forecast_data_df['day']==day)][f'{pred_linechart_kpi}'])
     #pred mean
     pred_mean_nan = [float("NaN")]*t
     pred_mean_future = plant_power_data_predict_mean[t:]
@@ -269,13 +273,13 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
                                                                 high=np.array(pred_mean_nan)/5)
     #add cols to df
     power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan_noisy
-    #+np.random.rand(168)*2
+    #+np.random.rand(24)*2
     #power_pred_df[f'']
 
     multiplier = power_pred_df[f'{pred_linechart_kpi}_pred_mean'].mean()/5
     #multiplier = 1
-    power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(168)*multiplier+multiplier/5
-    power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(168)*multiplier-multiplier/5
+    power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(24)*multiplier+multiplier/5
+    power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(24)*multiplier-multiplier/5
     power_pred_df['actual_kpi_label'] = (timesteps+1)*['actual value']
     power_pred_df['mean_label'] = (timesteps+1)*['predicted mean']
     power_pred_df['stddev_label'] = (timesteps+1)*['predicted std deviation']
@@ -290,12 +294,12 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
 
     line_plot_df = line_plot_df.melt(id_vars=['hours'],
                                      value_vars=['Actual Value', 'Predicted Value'],
-                                        var_name='Entity', value_name='m_watts', ignore_index=True)
+                                        var_name='Entity', value_name='k_watts', ignore_index=True)
     line_plot_df['mean_label'] = (timesteps+1)*(len(line_plot_df))
 
     #AgGrid(power_pred_df)
     kpi_lines = alt.Chart(line_plot_df, height=600).mark_line().encode(x=alt.X('hours'),
-                                                                        y=alt.Y('m_watts', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
+                                                                        y=alt.Y('k_watts', axis=alt.Axis(tickCount=30)).title("Mega Watts"),
                                                                         strokeDash='Entity',
                                                                         # color=alt.Color('mean_label',legend=alt.Legend(
                                                                         #                             orient='none',
@@ -307,7 +311,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
                                                                                 )
     
     
-    kpi_lines.encoding.x.scale = alt.Scale(domain=[0, 168])
+    kpi_lines.encoding.x.scale = alt.Scale(domain=[0, 24])
                        
 
     pred_band = (alt.Chart(power_pred_df).mark_area(opacity=0.3).encode(x='hours', 
@@ -323,7 +327,7 @@ def plot_kpi_prediction_data(plant_name, pred_linechart_kpi):
                                                                         #                                     )
                                                                                  )
     )
-    pred_band.encoding.x.scale = alt.Scale(domain=[0, 168])
+    pred_band.encoding.x.scale = alt.Scale(domain=[0, 24])
     full_chart = kpi_lines+pred_band
     full_chart.configure_view(cornerRadius=100)
 
@@ -337,7 +341,7 @@ def show_error_metrics(pred_df, kpi):
     pred_val = pred_df[f'{kpi}_pred_mean']
     n = len(pred_df)
     rmse = np.sqrt(np.sum(np.square(actual_val - pred_val))/n)
-    mape = (np.sum(np.abs(np.divide((actual_val-pred_val), actual_val)))/n)*100 
+    smape = symmetric_mape(np.array(actual_val), np.array(pred_val)) # (np.sum(np.abs(np.divide((actual_val-pred_val), actual_val)))/n)*100 
     metrics_col1, metrics_col2 = st.columns(2)
     with metrics_col1:
         with stylable_container(
@@ -354,8 +358,8 @@ def show_error_metrics(pred_df, kpi):
                 }
                 '''
         ):
-            st.markdown(f'<h4> MAPE </h4>', unsafe_allow_html=True)
-            st.markdown(f'<h3 style="text-align:center"> {mape:.3f}</h3>', unsafe_allow_html=True)
+            st.markdown(f'<h4> sMAPE </h4>', unsafe_allow_html=True)
+            st.markdown(f'<h3 style="text-align:center"> {smape:.3f}</h3>', unsafe_allow_html=True)
     with metrics_col2:
         with stylable_container(
             key='metric2',
@@ -389,10 +393,12 @@ def main():
     print("running forecast tab")
 
     # read csv from a github repo
-    st.session_state.forecast_dataset_url = "../data/dashboard/solar_powerplant_forecasting_data.csv"
+    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days.csv"
     st.session_state.full_forecast_data_df = get_data_forecast()
-    plant_names = st.session_state.full_forecast_data_df['name'].unique()
-    pred_linechart_kpi = 'total_energy_output'
+    plant_names = st.session_state.full_forecast_data_df['street_name'].unique()
+    day_of_week = st.session_state.full_forecast_data_df['day'].unique()
+
+    pred_linechart_kpi = 'load (kw)'
     pred_df = None
     #design the UI
     with stylable_container(
@@ -411,11 +417,11 @@ def main():
     col1, col2, col3 = st.columns([0.27, 0.63, 0.1])
     with col1:
         param_form_container = st.container(height=800, border=True)
-        run_eval_container = st.container(height=250, border=True)
+        run_eval_container = st.container(height=340, border=True)
     with col2:
-        pred_stats_container = st.container(height=300, border=False)   
+        pred_stats_container = st.container(height=340, border=False)   
         
-        pred_plot_container = st.container(height=750, border=True)
+        pred_plot_container = st.container(height=800, border=True)
         with pred_plot_container:
             st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
     with col3:
@@ -432,10 +438,12 @@ def main():
             with st.form("Evaluate on ", border=False):
                 st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
                 plant_name = st.selectbox('Select Plant', plant_names)
+                day = st.selectbox('Select Day', day_of_week)
+
                 predict_button = st.form_submit_button("Run Predition")
             if predict_button:
                 with pred_plot_container:
-                    pred_df = plot_kpi_prediction_data(plant_name, pred_linechart_kpi)
+                    pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
 
     with col2:
             with pred_stats_container:
