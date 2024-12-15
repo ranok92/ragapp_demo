@@ -458,7 +458,7 @@ def main():
     )
     st.html("../css/timeseries_page_styles.html")
     st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
-    st.session_state.ts_predict_initial_press = False
+    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days_non_zero.csv"
 
     build_main_page_timeseries_forecasting()
 

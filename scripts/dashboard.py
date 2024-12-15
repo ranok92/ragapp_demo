@@ -76,7 +76,7 @@ def main():
     # ----------------------------------
 
     #--- Data for forecasting tab ----
-    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days.csv"
+    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days_non_zero.csv"
 
     # read csv from a URL
 
