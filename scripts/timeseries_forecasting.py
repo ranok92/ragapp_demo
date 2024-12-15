@@ -436,14 +436,14 @@ def build_main_page_timeseries_forecasting():
                 day = st.selectbox('Select Day', day_of_week)
 
                 predict_button = st.form_submit_button("Run Predition")
-                
+
             st.session_state.ts_predict_initial_press = True
             with pred_plot_container:
                 pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
 
     with col2:
             with pred_stats_container:
-                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
+                st.markdown("<h3 style='text-align: center; color: black;'> Forecasting Performance </h3>", unsafe_allow_html=True)
 
                 if pred_df is not None:
                     show_error_metrics(pred_df, pred_linechart_kpi)
