@@ -379,21 +379,14 @@ def show_error_metrics(pred_df, kpi):
             st.markdown(f'<h4> RMSE </h4>', unsafe_allow_html=True)
             st.markdown(f'<h3 style="text-align:center"> {rmse:.3f}</h3>', unsafe_allow_html=True)
 
-def main():
-    st.set_page_config(
-        page_title="Telecom Dashboard",
-        page_icon="✅",
-        layout="wide",
-        
-    )
-    st.html("../css/timeseries_page_styles.html")
-    st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
+
+def build_main_page_timeseries_forecasting():
+    '''
+    This function build the entire timeseries forecasting page with all the components and 
+    logic excluding the headers.
+    '''
     setup_llms_forecast()
     setup_llm_chains_forecast()
-    print("running forecast tab")
-
-    # read csv from a github repo
-    st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days.csv"
     st.session_state.full_forecast_data_df = get_data_forecast()
     plant_names = st.session_state.full_forecast_data_df['street_name'].unique()
     day_of_week = st.session_state.full_forecast_data_df['day'].unique()
@@ -402,7 +395,7 @@ def main():
     pred_df = None
     #design the UI
     with stylable_container(
-        key='page_header',
+        key='forecast_header',
         css_styles='''
         {
             text-align: center;
@@ -413,27 +406,29 @@ def main():
         }
 ''',
     ):
-        st.markdown(f'<h1 style="color: white;"> Forecast Dashboard </h1>', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([0.27, 0.63, 0.1])
+        st.markdown(f'<h2 style="color: white;"> Forecast Dashboard </h2>', unsafe_allow_html=True)
+    
+
+    col1, col2, = st.columns([0.27, 0.73])
     with col1:
         param_form_container = st.container(height=800, border=True)
         run_eval_container = st.container(height=340, border=True)
+
     with col2:
-        pred_stats_container = st.container(height=340, border=False)   
-        
+        pred_stats_container = st.container(height=340, border=True)
         pred_plot_container = st.container(height=800, border=True)
         with pred_plot_container:
             st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
-    with col3:
-        chat_container = st.container(height=150, border=False)
-        with chat_container:
-            with st.popover(":headphones:", help='Model Consultant'):
-                build_chat_window_forecast_assistant()
-        blank_container = st.container(height=900, border=False)
+        
+    #with pred_stats_container:
+        
 
     with col1:
         with param_form_container:
-           build_param_selection_form()
+            build_param_selection_form()
+            with st.popover(":headphones:", help='Model Consultant'):
+                build_chat_window_forecast_assistant()
+
         with run_eval_container:
             with st.form("Evaluate on ", border=False):
                 st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
@@ -441,9 +436,10 @@ def main():
                 day = st.selectbox('Select Day', day_of_week)
 
                 predict_button = st.form_submit_button("Run Predition")
-            if predict_button:
-                with pred_plot_container:
-                    pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
+                
+            st.session_state.ts_predict_initial_press = True
+            with pred_plot_container:
+                pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
 
     with col2:
             with pred_stats_container:
@@ -451,6 +447,21 @@ def main():
 
                 if pred_df is not None:
                     show_error_metrics(pred_df, pred_linechart_kpi)
+
+
+def main():
+    st.set_page_config(
+        page_title="Telecom Dashboard",
+        page_icon="✅",
+        layout="wide",
+        
+    )
+    st.html("../css/timeseries_page_styles.html")
+    st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
+    st.session_state.ts_predict_initial_press = False
+
+    build_main_page_timeseries_forecasting()
+
 if __name__=='__main__':
     main()
 
