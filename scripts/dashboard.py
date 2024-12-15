@@ -63,77 +63,11 @@ def build_doc_assistant_tab():
     ):
         st.markdown(f'<h2 style="color: white;"> Assistant </h2>', unsafe_allow_html=True)
     build_main_page_general_assistant()
-    
-#---- Build solar forecast tab
 
-def build_forecast_tab():
-    print("running forecast tab")
-    setup_llms_forecast()
-    setup_llm_chains_forecast()
-    st.session_state.full_forecast_data_df = get_data_forecast()
-    plant_names = st.session_state.full_forecast_data_df['street_name'].unique()
-    day_of_week = st.session_state.full_forecast_data_df['day'].unique()
-
-    pred_linechart_kpi = 'load (kw)'
-    pred_df = None
-    #design the UI
-    with stylable_container(
-        key='forecast_header',
-        css_styles='''
-        {
-            text-align: center;
-            padding: 20px;
-            background: #4b6cb7;
-            color: white;
-            border-radius: 10px;
-        }
-''',
-    ):
-        st.markdown(f'<h2 style="color: white;"> Forecast Dashboard </h2>', unsafe_allow_html=True)
-    col1, col2, = st.columns([0.27, 0.73])
-    with col1:
-        param_form_container = st.container(height=800, border=True)
-        run_eval_container = st.container(height=340, border=True)
-
-    with col2:
-        pred_stats_container = st.container(height=340, border=True)
-        
-        pred_plot_container = st.container(height=800, border=True)
-
-
-        with pred_plot_container:
-            st.markdown("<h3 style='text-align: center; color: black;'> Forecast Plot </h3>", unsafe_allow_html=True)
-    
-    #with pred_stats_container:
-        
-
-    with col1:
-        with param_form_container:
-            build_param_selection_form()
-            with st.popover(":headphones:", help='Model Consultant'):
-                build_chat_window_forecast_assistant()
-
-        with run_eval_container:
-            with st.form("Evaluate on ", border=False):
-                st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
-                plant_name = st.selectbox('Select Plant', plant_names)
-                day = st.selectbox('Select Day', day_of_week)
-
-                predict_button = st.form_submit_button("Run Predition")
-            if predict_button:
-                with pred_plot_container:
-                    pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
-
-    with col2:
-            with pred_stats_container:
-                st.markdown("<h3 style='text-align: center; color: black;'> Forecast Error </h3>", unsafe_allow_html=True)
-
-                if pred_df is not None:
-                    show_error_metrics(pred_df, pred_linechart_kpi)
 
 def main():
     st.set_page_config(
-        page_title="DecisionGPT Dashboard",
+        page_title="OTPP-GPT Dashboard",
         page_icon="✅",
         layout="wide",
     )
@@ -146,7 +80,7 @@ def main():
 
     # read csv from a URL
 
-    st.title("FinanceGPT: Forecasting & Support")
+    st.title("OTPP-GPT: Forecasting & Support")
 
 
     if 'count' not in st.session_state:
@@ -182,7 +116,7 @@ def main():
 
    
             with forecast_tab:
-                build_forecast_tab()
+                build_main_page_timeseries_forecasting()
 
             with doc_assist_tab:
                 build_doc_assistant_tab()
