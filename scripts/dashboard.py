@@ -110,11 +110,9 @@ def main():
                 authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            forecast_tab, doc_assist_tab = st.tabs([':chart_with_upwards_trend: Forecasting', ':headphones: Assistant'])
+            doc_assist_tab, forecast_tab = st.tabs([':headphones: Assistant', ':chart_with_upwards_trend: Forecasting'])
 
             #---- SET UP THE PAGE STRUCTURE ---
-
-   
             with forecast_tab:
                 build_main_page_timeseries_forecasting()
 
