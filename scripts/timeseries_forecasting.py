@@ -187,7 +187,7 @@ def query_chain_forecast():
                                     "content": resp['answer']})
 
 
-
+@st.fragment
 def build_chat_window_forecast_assistant():
     #st.markdown(f'<h3 style="color:black; text-align:center">Forecasting Assistant</h3>', unsafe_allow_html=True)
 
@@ -203,7 +203,7 @@ def build_chat_window_forecast_assistant():
         for msg in st.session_state.messages_forecast:
             st.chat_message(msg['speaker']).markdown(msg['content'])
 
-
+@st.fragment
 def build_param_selection_form():
     st.markdown(f'<h3 style="color:black ;text-align:center">Model Definition </h2>', unsafe_allow_html=True)
     param_select_form = st.form('Select params', border=False)
@@ -238,7 +238,7 @@ def build_param_selection_form():
             st.session_state.timeseries_form_info['optimizer_selected'] = optimizer_selected 
             st.session_state.timeseries_form_info['learning_rate_selected'] = learning_rate
 
-   
+@st.fragment  
 def plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi):
 
     timesteps = 23
@@ -270,7 +270,7 @@ def plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi):
 
     #add noise to mean to emulate different perdictions 
     pred_mean_nan_noisy = pred_mean_nan+ np.random.uniform(low=np.zeros(len(pred_mean_nan)), 
-                                                                high=np.array(pred_mean_nan)/5)
+                                                                high=np.array(pred_mean_nan)/15)
     #add cols to df
     power_pred_df[f'{pred_linechart_kpi}_pred_mean'] = pred_mean_nan_noisy
     #+np.random.rand(24)*2
@@ -278,8 +278,8 @@ def plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi):
 
     multiplier = power_pred_df[f'{pred_linechart_kpi}_pred_mean'].mean()/5
     #multiplier = 1
-    power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(24)*multiplier+multiplier/5
-    power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(24)*multiplier-multiplier/5
+    power_pred_df[f'{pred_linechart_kpi}_pred_upper'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']+np.array(pred_std_nan)+np.random.rand(24)*multiplier+multiplier/20
+    power_pred_df[f'{pred_linechart_kpi}_pred_lower'] = power_pred_df[f'{pred_linechart_kpi}_pred_mean']-np.array(pred_std_nan)-np.random.rand(24)*multiplier-multiplier/20
     power_pred_df['actual_kpi_label'] = (timesteps+1)*['actual value']
     power_pred_df['mean_label'] = (timesteps+1)*['predicted mean']
     power_pred_df['stddev_label'] = (timesteps+1)*['predicted std deviation']
@@ -329,12 +329,12 @@ def plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi):
     )
     pred_band.encoding.x.scale = alt.Scale(domain=[0, 24])
     full_chart = kpi_lines+pred_band
-    full_chart.configure_view(cornerRadius=100)
-
+    #full_chart.configure_view(cornerRadius=100)
     st.altair_chart((full_chart), use_container_width=True)
+
     return power_pred_df
 
-
+@st.fragment
 def show_error_metrics(pred_df, kpi):
 
     actual_val = pred_df[kpi]
@@ -379,12 +379,14 @@ def show_error_metrics(pred_df, kpi):
             st.markdown(f'<h4> RMSE </h4>', unsafe_allow_html=True)
             st.markdown(f'<h3 style="text-align:center"> {rmse:.3f}</h3>', unsafe_allow_html=True)
 
-
+@st.fragment
 def build_main_page_timeseries_forecasting():
     '''
     This function build the entire timeseries forecasting page with all the components and 
     logic excluding the headers.
     '''
+    if 'predict_button_press_counter' not in st.session_state:
+        st.session_state.predict_button_press_counter = 0
     setup_llms_forecast()
     setup_llm_chains_forecast()
     st.session_state.full_forecast_data_df = get_data_forecast()
@@ -437,9 +439,15 @@ def build_main_page_timeseries_forecasting():
 
                 predict_button = st.form_submit_button("Run Predition")
 
-            st.session_state.ts_predict_initial_press = True
-            with pred_plot_container:
-                pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
+            if st.session_state.predict_button_press_counter==0:
+                st.session_state.predict_button_press_counter += 1
+                with pred_plot_container:
+                    pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
+            else:
+                if predict_button:
+                    with pred_plot_container:
+
+                        pred_df = plot_kpi_prediction_data(plant_name, day, pred_linechart_kpi)
 
     with col2:
             with pred_stats_container:
@@ -456,10 +464,9 @@ def main():
         layout="wide",
         
     )
-    st.html("../css/timeseries_page_styles.html")
+    #st.html("../css/timeseries_page_styles.html")
     st.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>', unsafe_allow_html=True)    
     st.session_state.forecast_dataset_url = "../data/otpp/ev_charging/load_profile_ev_charging_by_location_days_non_zero.csv"
-
     build_main_page_timeseries_forecasting()
 
 if __name__=='__main__':
