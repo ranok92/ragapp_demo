@@ -191,14 +191,14 @@ def annotate_response(response_sentences, scores, hallu_method='deepeval'):
                 sent = f"""
                         <div class="hover-text highlight-red">
                             {sent}
-                            <div class="hover-message">"Severe Error"</div>
+                            <div class="hover-message">"Severe Hallucination detected!!!"</div>
                         </div>
                         """
-            if score > 0.25 and score <= 1:
+            if score > 0.25 and score <= 0.5:
                 sent = f"""
                         <div class="hover-text highlight-violet">
                             {sent}
-                            <div class="hover-message">"Mild Error"</div>
+                            <div class="hover-message">"Mild Hallucination detected."</div>
                         </div>
                         """
             anno_result += sent 
