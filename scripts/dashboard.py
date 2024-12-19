@@ -61,7 +61,7 @@ def build_doc_assistant_tab():
         }
 ''',
     ):
-        st.markdown(f'<h2 style="color: white;"> Assistant </h2>', unsafe_allow_html=True)
+        st.markdown(f'<h2 style="color: white;"> OTPP Assistant </h2>', unsafe_allow_html=True)
     build_main_page_general_assistant()
 
 
@@ -80,7 +80,7 @@ def main():
 
     # read csv from a URL
 
-    st.title("OTPP-GPT: Forecasting & Support")
+    st.title("OTPP-GPT: A Trustworthy-LLM based Decision Making Platform")
 
 
     if 'count' not in st.session_state:
@@ -110,7 +110,7 @@ def main():
                 authenticator.logout('Logout', 'main')
             st.write(f"Welcome :blue[{name}]")
             
-            doc_assist_tab, forecast_tab = st.tabs([':headphones: Assistant', ':chart_with_upwards_trend: Forecasting'])
+            doc_assist_tab, forecast_tab = st.tabs([':headphones: OTPP Assistant', ':chart_with_upwards_trend: Forecasting'])
 
             #---- SET UP THE PAGE STRUCTURE ---
             with forecast_tab:
@@ -118,7 +118,7 @@ def main():
 
             with doc_assist_tab:
                 build_doc_assistant_tab()
-        #time.sleep(4)
+
     elif authentication_status == False:
         st.error('Username/password is incorrect')
     elif authentication_status == None:
