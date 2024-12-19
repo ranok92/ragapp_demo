@@ -24,7 +24,7 @@ from langchain.chains import LLMChain
 from langchain_core.messages import HumanMessage, AIMessage
 from prompts.prompt_template import *
 from utils.utils import *
-from utils.hallucination_detection import CosineDetector
+from utils.hallucination_detection import CosineDetector, DeepEvalDetector
 import ipdb 
 import glob
 import warnings
@@ -46,7 +46,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 nlp = spacy.load("en_core_web_sm")
 
 
-VECTOR_DB_PATHS = Path('../vectorstores/finance_QA')
+VECTOR_DB_PATHS = Path('../vectorstores/finance_QA_openaiembedding')
 
 
 # LOCAL_VECTOR_STORE_DIR = Path('../vectorstore')
@@ -101,7 +101,6 @@ def setup_llms_assistant():
     )
     
     # st.session_state.llm_dashboard_assistant = Ollama(model='llama3.1', format='json', system="You are a bot who specializes on reading tabular data, summarizing them and providing insights.")
-    st.session_state.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2") #chroma default embedding model
 
 @st.cache_resource
 def setup_llm_chains_assistant():
@@ -136,13 +135,15 @@ def setup_llm_chains_assistant():
 @st.cache_resource
 def load_vectordbs():
     st.session_state.finance_db = Chroma(persist_directory=VECTOR_DB_PATHS.as_posix(), 
-                                         embedding_function=HuggingFaceEmbeddings())
+                                         embedding_function=OpenAIEmbeddings())
     
 
 @st.cache_resource 
 def load_hallucination_detector():
     embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
-    st.session_state.hallucination_detector = CosineDetector(embedding_model)
+    #st.session_state.hallucination_detector = CosineDetector(embedding_model)
+    st.session_state.hallucination_detector = DeepEvalDetector('faithfulness',
+                                                               'gpt-4o-mini' )
 
 
 def get_db_files(db):
@@ -182,29 +183,26 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
     return resp_sentences, sent_scores_nli
 
 
-def check_sentence_hallucination_cosine_similarity(
-                                                    context, 
-                                                    response, 
-                                                   ):
-  
-    context_page_content = [doc.page_content for doc in context]
-    resp_sentences = [sent.text.strip() for sent in nlp(response).sents] # spacy sentence tokenization
-    sent_embeddings = st.session_state.embedding_model.encode(resp_sentences)
-    context_embeddings = st.session_state.embedding_model.encode(context_page_content)
-    sentence_cosine_scores = cosine_similarity(sent_embeddings, context_embeddings)
-    return resp_sentences, np.max(sentence_cosine_scores, axis=1)
-
-
-def annotate_response(reponse_sentences, scores, hallu_method='selfcheckgpt'):
+def annotate_response(response_sentences, scores, hallu_method='deepeval'):
     anno_result = ""
+    if hallu_method in ['cosine_similarity', 'deepeval']:
+        for sent, score in zip(response_sentences, scores):
+            if score <= 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
+                sent = f"""
+                        <div class="hover-text highlight-red">
+                            {sent}
+                            <div class="hover-message">"Severe Error"</div>
+                        </div>
+                        """
+            if score > 0.25 and score <= 1:
+                sent = f"""
+                        <div class="hover-text highlight-violet">
+                            {sent}
+                            <div class="hover-message">"Mild Error"</div>
+                        </div>
+                        """
+            anno_result += sent 
 
-    for sent, score in zip(reponse_sentences, scores):
-        if score < 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
-            sent = f":red-background[{sent}]"
-        if score > 0.25 and score < 0.5:
-            sent = f":violet-background[{sent}]"
-
-        anno_result += sent 
     return anno_result
 
 
@@ -260,11 +258,11 @@ def query_chain_general_assistant():
             
             #resp_sent, scores = check_sentence_hallucination(resp_string, docs, result, sample_size=5)
             if st.session_state.use_hallu_detect:
-                resp_sent, scores = st.session_state.hallucination_detector.check_hallucination('', result_clean, docs)
+                resp_sent, scores = st.session_state.hallucination_detector.check_hallucination(resp_string, result_clean, docs)
                 print("\n\n\n Execution time : ", time.time()-start_time)
-                anno_result = annotate_response(resp_sent, scores, 'cosine_similarity')
+                anno_result = annotate_response(resp_sent, scores, 'deepeval')
                 for s, score in zip(resp_sent, scores):
-                    print(f"*****************Sentence: {s} \n Scores ***************: {s}")
+                    print(f"*****************Sentence: {s} \n Scores ***************: {score}")
                 # print("RESULT ***************", result)
                 # print("RESULT ***************", anno_result)
             else:
@@ -472,15 +470,53 @@ def build_context_display_window():
 
             i+=1
 
-
-
 def build_main_page_general_assistant():
 
     setup_llms_assistant()
     setup_llm_chains_assistant()
     load_vectordbs()    
     load_hallucination_detector()
-
+    st.markdown("""
+        <style>
+        .highlight-violet {
+            background-color: violet;
+            color: black;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+        .highlight-red {
+            background-color: red;
+            color: black;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+        .hover-text {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .hover-text .hover-message {
+            visibility: hidden;
+            width: 100px;
+            background-color: black;
+            color: white;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0.2;
+            transition: opacity 0.3s;
+        }
+        .hover-text:hover .hover-message {
+            visibility: visible;
+            opacity: 0.8;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 # App logic
     #uploaded_file = st.session_state.source_docs
 
@@ -512,12 +548,13 @@ def build_main_page_general_assistant():
         if st.session_state.show_supporting_docs:
             with st.container(height=400):
                 for msg in st.session_state.messages_gen_assist:
-                    st.chat_message(msg['speaker']).markdown(msg['content'])
+                    with st.chat_message(msg['speaker']):
+                        st.markdown(msg['content'], unsafe_allow_html=True)
         else:
             with st.container(height=800):
                 for msg in st.session_state.messages_gen_assist:
-                    st.chat_message(msg['speaker']).markdown(msg['content'])
-
+                    with st.chat_message(msg['speaker']):
+                        st.markdown(msg['content'], unsafe_allow_html=True)
     #display the documents in the context used to come up with the answer\
     
     if st.session_state.show_supporting_docs:
