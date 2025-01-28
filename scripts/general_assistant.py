@@ -438,7 +438,24 @@ def build_doc_management_console():
         #     if delete_file_button:
         #         delete_files_from_db()
 
-@st.fragment
+def build_chat_display_window():
+    st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+                    on_submit=query_chain_general_assistant,
+                    key='current_input')
+
+    #display the chat history so far
+    if st.session_state.show_supporting_docs:
+        with st.container(height=400):
+            for msg in st.session_state.messages_gen_assist:
+                with st.chat_message(msg['speaker']):
+                    st.markdown(msg['content'], unsafe_allow_html=True)
+    else:
+        with st.container(height=800):
+            for msg in st.session_state.messages_gen_assist:
+                with st.chat_message(msg['speaker']):
+                    st.markdown(msg['content'], unsafe_allow_html=True)
+
+
 def build_context_display_window():
     row_container_list = []
     if 'response_context' in st.session_state and st.session_state.response_context !="":
@@ -469,6 +486,40 @@ def build_context_display_window():
                         st.write(context_doc.page_content)
 
             i+=1
+
+@st.fragment
+def build_chat_window_and_context_display_console():
+    if st.session_state.show_supporting_docs:
+        chat_window =  st.container(height=500,  border=False)  
+        context_display_console = st.container(height=400,  border=True)  
+    else:
+        chat_window =  st.container(height=900,  border=True)  
+
+    with chat_window:
+        build_chat_display_window()
+
+        # st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+        #                 on_submit=query_chain_general_assistant,
+        #                 key='current_input')
+
+        # #display the chat history so far
+        # if st.session_state.show_supporting_docs:
+        #     with st.container(height=400):
+        #         for msg in st.session_state.messages_gen_assist:
+        #             with st.chat_message(msg['speaker']):
+        #                 st.markdown(msg['content'], unsafe_allow_html=True)
+        # else:
+        #     with st.container(height=800):
+        #         for msg in st.session_state.messages_gen_assist:
+        #             with st.chat_message(msg['speaker']):
+        #                 st.markdown(msg['content'], unsafe_allow_html=True)
+    #display the documents in the context used to come up with the answer\
+    
+    if st.session_state.show_supporting_docs:
+        with context_display_console:
+            build_context_display_window()
+
+
 
 def build_main_page_general_assistant():
 
@@ -533,35 +584,38 @@ def build_main_page_general_assistant():
         build_chatbot_params_console()    
 
     with col2:
-        if st.session_state.show_supporting_docs:
-            chat_window =  st.container(height=500,  border=False)  
-            context_display_console = st.container(height=400,  border=True)  
-        else:
-            chat_window =  st.container(height=900,  border=True)  
+        build_chat_window_and_context_display_console()
+    #     if st.session_state.show_supporting_docs:
+    #         chat_window =  st.container(height=500,  border=False)  
+    #         context_display_console = st.container(height=400,  border=True)  
+    #     else:
+    #         chat_window =  st.container(height=900,  border=True)  
 
-    with chat_window:
-        st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
-                        on_submit=query_chain_general_assistant,
-                        key='current_input')
+    # with chat_window:
+    #     build_chat_display_window()
 
-        #display the chat history so far
-        if st.session_state.show_supporting_docs:
-            with st.container(height=400):
-                for msg in st.session_state.messages_gen_assist:
-                    with st.chat_message(msg['speaker']):
-                        st.markdown(msg['content'], unsafe_allow_html=True)
-        else:
-            with st.container(height=800):
-                for msg in st.session_state.messages_gen_assist:
-                    with st.chat_message(msg['speaker']):
-                        st.markdown(msg['content'], unsafe_allow_html=True)
-    #display the documents in the context used to come up with the answer\
+    #     # st.chat_input(placeholder = 'Ask me anything: From writing emails to finding answers from documents. ', 
+    #     #                 on_submit=query_chain_general_assistant,
+    #     #                 key='current_input')
+
+    #     # #display the chat history so far
+    #     # if st.session_state.show_supporting_docs:
+    #     #     with st.container(height=400):
+    #     #         for msg in st.session_state.messages_gen_assist:
+    #     #             with st.chat_message(msg['speaker']):
+    #     #                 st.markdown(msg['content'], unsafe_allow_html=True)
+    #     # else:
+    #     #     with st.container(height=800):
+    #     #         for msg in st.session_state.messages_gen_assist:
+    #     #             with st.chat_message(msg['speaker']):
+    #     #                 st.markdown(msg['content'], unsafe_allow_html=True)
+    # #display the documents in the context used to come up with the answer\
     
-    if st.session_state.show_supporting_docs:
-        with context_display_console:
-                build_context_display_window()
-    # with document_management_console:
-    #     build_doc_management_console()
+    # if st.session_state.show_supporting_docs:
+    #     with context_display_console:
+    #         build_context_display_window()
+    # # with document_management_console:
+    # #     build_doc_management_console()
 
 
 def main():
