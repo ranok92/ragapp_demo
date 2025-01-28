@@ -434,7 +434,7 @@ def build_main_page_timeseries_forecasting():
         with run_eval_container:
             with st.form("Evaluate on ", border=False):
                 st.markdown(f'<h3 style="color:black;text-align:center">Evaluate on: </h2>', unsafe_allow_html=True)
-                plant_name = st.selectbox('Select Plant', plant_names)
+                plant_name = st.selectbox('Select Charging Station', plant_names)
                 day = st.selectbox('Select Day', day_of_week)
 
                 predict_button = st.form_submit_button("Run Predition")
