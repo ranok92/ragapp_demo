@@ -21,10 +21,17 @@ class CosineDetector:
     def check_hallucination(self, query, response, context):
 
         context_page_content = [doc.page_content for doc in context]
+        context_page_content.append("I don't know the answer.")
+
         resp_sentences = [sent.text.strip() for sent in nlp(response).sents] # spacy sentence tokenization
         sent_embeddings = self.embedding_model.embed_documents(resp_sentences)
         context_embeddings = self.embedding_model.embed_documents(context_page_content)
+        query_embeddings = self.embedding_model.embed_documents([query])
         sentence_cosine_scores = cosine_similarity(sent_embeddings, context_embeddings)
+        sentence_cosine_scores_original_query = cosine_similarity(sent_embeddings, query_embeddings)
+        import ipdb; ipdb.set_trace()
+        sentence_cosine_scores = np.concatenate(sentence_cosine_scores, 
+                                                sentence_cosine_scores_original_query, axis=1)
         return resp_sentences, np.abs(np.max(sentence_cosine_scores, axis=1))
 
 
@@ -58,7 +65,7 @@ class SelfcheckNLIDetector:
         return resp_sentences, 1-np.array(sent_scores_nli) # score 0: hallucination, 1: no hallucination
 
 
-class DeepvalDetector:
+class DeepEvalDetector:
     def __init__(self, metric, model: str, threshold: float = 0.5, include_reason: bool= False, async_mode: bool = True):
         if 'faithfulness' in metric:
             self.metric = FaithfulnessMetric(
@@ -71,16 +78,20 @@ class DeepvalDetector:
             raise NotImplementedError 
     
     def check_hallucination(self, input, output, context):
+
+        context_page_content = [doc.page_content for doc in context]
         resp_sentences = [sent.text.strip() for sent in nlp(output).sents] # spacy sentence tokenization
         scores = []
         for sent in resp_sentences:
             test_case = LLMTestCase(
                     input=input,
-                    actual_output=output,
-                    retrieval_context=context
+                    actual_output=sent,
+                    retrieval_context=context_page_content
                 )
             self.metric.measure(test_case)
             scores.append(self.metric.score)
 
         return resp_sentences, scores
+    
+
     
