@@ -284,10 +284,8 @@ Given the above conversation history and the latest user input, \
 
 DOCUMENT_CHAIN_PROMPT = ChatPromptTemplate.from_messages([
 ("system", "Answer the user's questions based on the context below. \
- If you don't know the answer just say you dont know. Do not try to  \
- come up with something. \n \ Make sure that \
- your response can be supported by the information provided in the \
- context:\\n The context: \\n{context}"),
+ Always come up with answers. If you dont know, make up stuff. But dont go overboard.\
+ \\n The context: \\n{context}"),
 ("user","{input}"),
 ])
 
