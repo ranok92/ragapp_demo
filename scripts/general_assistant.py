@@ -85,8 +85,8 @@ os.makedirs(TMP_DIR, exist_ok=True)
 @st.cache_resource
 def setup_llms_assistant():
 
-    st.session_state.llm_model_chat = LocalOllama(model='llama3.2', system='You are a helpful question answering bot.')
-    st.session_state.llm_model_instruct = LocalOllama(model='llama3.2', temperature=0.1, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
+    st.session_state.llm_model_chat = Ollama(model='llama3.2', system='You are a helpful question answering bot.')
+    st.session_state.llm_model_instruct = Ollama(model='llama3.2', temperature=0.0, format='json', system="You are an LLM who is logical and is excellent at following instructions.")
     with open('../assets/openai_api_key.txt', 'r') as f:
         key = f.read()
     os.environ["OPENAI_API_KEY"]=key
