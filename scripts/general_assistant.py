@@ -184,7 +184,7 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
 
 
 def annotate_response(response_sentences, scores, hallu_method='deepeval'):
-    anno_result = ''''''
+    anno_result = ""
     if hallu_method in ['cosine_similarity', 'deepeval']:
         for sent, score in zip(response_sentences, scores):
             if score <= 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
@@ -204,7 +204,7 @@ def annotate_response(response_sentences, scores, hallu_method='deepeval'):
             # else:
             #     sent = re.sub('\$','\\$', sent)
             anno_result += sent 
-
+        anno_result = re.sub(r"\$",r"\\$", anno_result)
     return anno_result
 
 
