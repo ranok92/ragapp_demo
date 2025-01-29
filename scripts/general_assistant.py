@@ -184,23 +184,25 @@ def check_sentence_hallucination(query, context, response, sample_size=5):
 
 
 def annotate_response(response_sentences, scores, hallu_method='deepeval'):
-    anno_result = ""
+    anno_result = ''''''
     if hallu_method in ['cosine_similarity', 'deepeval']:
         for sent, score in zip(response_sentences, scores):
             if score <= 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
                 sent = f"""
                         <div class="hover-text highlight-red">
                             {sent}
-                            <div class="hover-message">"Severe Hallucination detected!!!"</div>
+                            <div class="hover-message">Severe Hallucination detected!!!</div>
                         </div>
                         """
-            if score > 0.25 and score <= 0.5:
+            if score > 0.25 and score < 0.5:
                 sent = f"""
                         <div class="hover-text highlight-violet">
                             {sent}
-                            <div class="hover-message">"Mild Hallucination detected."</div>
+                            <div class="hover-message">Mild Hallucination detected.</div>
                         </div>
                         """
+            # else:
+            #     sent = re.sub('\$','\\$', sent)
             anno_result += sent 
 
     return anno_result
@@ -300,8 +302,9 @@ def query_chain_general_assistant():
     # rel_sources = [doc.metadata['source'] for doc in docs]
     # rel_pages = [doc.metadata['page'] for doc in docs]
     # rel_data_resp = f'\n Relevant information can be found in the following documents : {" ".join(rel_sources)}'
+    print("**************annotated respose **********", anno_result)
     st.session_state.messages_gen_assist.append({"speaker" : "AI",
-                                    "content": re.sub('\$','\\$',anno_result)
+                                    "content": anno_result
 })
     
 
@@ -483,7 +486,7 @@ def build_context_display_window():
 
                 with context_disp_col2:
                     with st.popover("View page contents"):
-                        st.write(context_doc.page_content)
+                        st.write(re.sub('\$', '\\$', context_doc.page_content))
 
             i+=1
 
