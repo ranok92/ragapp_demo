@@ -29,9 +29,9 @@ class CosineDetector:
         query_embeddings = self.embedding_model.embed_documents([query])
         sentence_cosine_scores = cosine_similarity(sent_embeddings, context_embeddings)
         sentence_cosine_scores_original_query = cosine_similarity(sent_embeddings, query_embeddings)
-        import ipdb; ipdb.set_trace()
-        sentence_cosine_scores = np.concatenate(sentence_cosine_scores, 
-                                                sentence_cosine_scores_original_query, axis=1)
+        #import ipdb; ipdb.set_trace()
+        sentence_cosine_scores = np.concatenate([sentence_cosine_scores, 
+                                                sentence_cosine_scores_original_query], axis=1)
         return resp_sentences, np.abs(np.max(sentence_cosine_scores, axis=1))
 
 
