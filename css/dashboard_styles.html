@@ -131,11 +131,29 @@
         background: #a1f3af;
         border: None;
     }
-    div[data-testid='stPopoverBody']{
+    /* div[data-testid='stPopoverBody']{
       width: 500px;
+      overflow:visible;
       position: relative;
-      /*transform: translate(10%, 30%);*/
-    }  
+      transform: translate(10%, 30%);
+    }   
+    */
+
+    div[data-testid='stPopoverBody'] {
+      width: 400px; /* Set a fixed width or adjust as needed */
+      max-width: 90vw; /* Prevent exceeding viewport width */
+      max-height: 90vh; /* Prevent exceeding viewport height */
+      overflow: auto; /* Enable scrolling if needed */
+      position: absolute; /* Position relative to the triggering element */
+      top: 100%; /* Place it below the originating element */
+      left: 0; /* Align to the left of the originating element */
+      z-index: 9999; /* Ensure it's above other elements */
+      background: white; /* Background color for clarity */
+      padding: 10px; /* Optional: Add padding */
+      border: 1px solid #ccc; /* Optional: Border for visibility */
+      border-radius: 8px; /* Optional: Rounded corners */
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Optional: Shadow for better focus */
+    }
     /* submit button */
     div[data-testid="stFormSubmitButton"] > button {
         display: inline-block;
