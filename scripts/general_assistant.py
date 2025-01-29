@@ -141,9 +141,9 @@ def load_vectordbs():
 @st.cache_resource 
 def load_hallucination_detector():
     embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
-    #st.session_state.hallucination_detector = CosineDetector(embedding_model)
-    st.session_state.hallucination_detector = DeepEvalDetector('faithfulness',
-                                                               'gpt-4o-mini' )
+    st.session_state.hallucination_detector = CosineDetector(embedding_model)
+    # st.session_state.hallucination_detector = DeepEvalDetector('faithfulness',
+    #                                                            'gpt-4o-mini' )
 
 
 def get_db_files(db):
@@ -254,7 +254,7 @@ def query_chain_general_assistant():
 
         #annotate the response with hallucination information
         if st.session_state.use_kb:
-            regex = re.compile("[^a-zA-Z0-9.,!' $\n\-():]")
+            regex = re.compile("[^a-zA-Z0-9.,!' $\n\-():%]")
             result_clean = regex.sub('', rag_response)
             start_time = time.time()
             
@@ -262,7 +262,7 @@ def query_chain_general_assistant():
             if st.session_state.use_hallu_detect:
                 resp_sent, scores = st.session_state.hallucination_detector.check_hallucination(resp_string, result_clean, docs)
                 print("\n\n\n Execution time : ", time.time()-start_time)
-                anno_result = annotate_response(resp_sent, scores, 'deepeval')
+                anno_result = annotate_response(resp_sent, scores, 'cosine_similarity')
                 for s, score in zip(resp_sent, scores):
                     print(f"*****************Sentence: {s} \n Scores ***************: {score}")
                 # print("RESULT ***************", result)
