@@ -188,19 +188,15 @@ def annotate_response(response_sentences, scores, hallu_method='deepeval'):
     if hallu_method in ['cosine_similarity', 'deepeval']:
         for sent, score in zip(response_sentences, scores):
             if score <= 0.25: #0 is no hallu, 1 is hallu / for cosine sim: 0 is hallu, 1 is not
-                sent = f"""
-                        <div class="hover-text highlight-red">
+                sent = f"""<div class="hover-text highlight-red">
                             {sent}
                             <div class="hover-message">Severe Hallucination detected!!!</div>
-                        </div>
-                        """
+                        </div> """
             if score > 0.25 and score < 0.5:
-                sent = f"""
-                        <div class="hover-text highlight-violet">
+                sent = f"""<div class="hover-text highlight-violet">
                             {sent}
                             <div class="hover-message">Mild Hallucination detected.</div>
-                        </div>
-                        """
+                        </div>"""
             # else:
             #     sent = re.sub('\$','\\$', sent)
             anno_result += sent 
